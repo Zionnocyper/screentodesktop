@@ -87,7 +87,11 @@ function viewButton(device) {
 const serverDevices = new Map();
 let stopWatching = null;
 
-function renderServer({ devices = [], error = null }) {
+let serverData = { devices: [], discovered: [], mdns: null, error: null };
+
+function renderServer(data) {
+  serverData = { devices: [], discovered: [], mdns: null, error: null, ...data };
+  const { devices, error } = serverData;
   const grid = $('server-devices');
   const seen = new Set();
   for (const info of devices) {
@@ -100,17 +104,22 @@ function renderServer({ devices = [], error = null }) {
 
   grid.replaceChildren();
   $('panel-server').querySelector('.empty')?.remove();
+  renderDiscovered();
+  renderPairDetected();
   if (error) {
     grid.after(h('div', { class: 'empty' }, `Không kết nối được adb trên server: ${error}`));
     return;
   }
   if (!serverDevices.size) {
-    grid.after(h('div', { class: 'empty' }, 'Chưa có thiết bị nào. Cắm điện thoại vào máy chủ (đã bật Gỡ lỗi USB) hoặc kết nối qua Wi-Fi.'));
+    grid.after(
+      h('div', { class: 'empty' }, 'Chưa có thiết bị nào. Cắm cáp vào máy chủ (đã bật Gỡ lỗi USB), hoặc bấm “Ghép đôi Wi-Fi” để kết nối không dây.'),
+    );
     return;
   }
   for (const d of serverDevices.values()) {
     const i = d.info;
-    const meta = [i.androidVersion && `Android ${i.androidVersion}`, i.wireless ? 'Wi-Fi' : 'USB', d.serial].filter(Boolean).join(' · ');
+    const where = i.wireless ? `Wi-Fi${i.address ? ` ${i.address}` : ''}` : 'USB';
+    const meta = [i.androidVersion && `Android ${i.androidVersion}`, where, i.wireless && i.address ? null : d.serial].filter(Boolean).join(' · ');
     const hint =
       d.state === 'unauthorized'
         ? 'Mở khóa điện thoại và bấm “Cho phép” trong hộp thoại gỡ lỗi USB.'
@@ -158,6 +167,134 @@ async function enableWifi(device) {
   }
 }
 
+// ------------------------------------------------------------ Wi-Fi: discovery + pairing
+function discoveredName(s) {
+  return s.name || (s.serialHint ? `Điện thoại ${s.serialHint}` : s.instance);
+}
+
+/** Phones advertising Wireless debugging (or a pairing code) that are not connected yet. */
+function renderDiscovered() {
+  const all = serverData.discovered ?? [];
+  // A phone showing its pairing dialog also advertises its connect service: show it once.
+  const waiting = new Set(all.filter((s) => s.type === 'pairing').map((s) => s.instance));
+  const items = all.filter((s) => !s.connected && !(s.type === 'connect' && waiting.has(s.instance)));
+  const grid = $('discovered-list');
+  grid.replaceChildren();
+  $('server-discovered').hidden = !items.length;
+  for (const s of items) {
+    const pairing = s.type === 'pairing';
+    const avatar = h('div', { class: 'device-avatar' });
+    avatar.innerHTML = icon(pairing ? 'link' : 'wifi');
+    const action = pairing
+      ? iconButton('link', 'Ghép đôi', { class: 'btn primary', onclick: () => openPair(s.address) })
+      : iconButton('wifi', 'Kết nối', { class: 'btn primary', onclick: () => connectAddress(s.target, discoveredName(s)) });
+    grid.append(
+      h(
+        'article',
+        { class: 'device-card' },
+        h(
+          'div',
+          { class: 'device-top' },
+          avatar,
+          h(
+            'div',
+            { class: 'device-text' },
+            h('div', { class: 'device-name', title: s.instance }, discoveredName(s)),
+            h('div', { class: 'device-meta' }, `${pairing ? 'Đang chờ ghép đôi' : 'Gỡ lỗi không dây'} · ${s.address}`),
+          ),
+          h('span', { class: `badge ${pairing ? 'warn' : 'off'}` }, pairing ? 'Chờ ghép đôi' : 'Chưa kết nối'),
+        ),
+        !pairing && h('div', { class: 'device-note' }, 'Kết nối không được? Ghép đôi trước bằng mã 6 số.'),
+        h('div', { class: 'device-actions' }, action),
+      ),
+    );
+  }
+}
+
+async function connectAddress(address, label = address) {
+  const t = toast(`Đang kết nối ${label}…`, { timeout: 0 });
+  try {
+    const { message } = await api('/api/adb/connect', { method: 'POST', body: { address } });
+    t.done(message);
+    return true;
+  } catch (err) {
+    t.done(err.message, 'error');
+    return false;
+  }
+}
+
+const pairDialog = $('pair-dialog');
+
+function renderPairDetected() {
+  if (!pairDialog.open) return;
+  const pairing = (serverData.discovered ?? []).filter((s) => s.type === 'pairing');
+  $('pair-mdns-off').hidden = serverData.mdns !== false;
+  $('pair-detected').hidden = !pairing.length;
+  $('pair-chips').replaceChildren(
+    ...pairing.map((s) => {
+      const chip = h('button', { type: 'button', class: 'chip', title: s.instance });
+      chip.innerHTML = icon('phone');
+      chip.append(h('span', {}, discoveredName(s)), h('small', {}, s.address));
+      chip.addEventListener('click', () => {
+        $('pair-address').value = s.address;
+        $('pair-code').focus();
+      });
+      return chip;
+    }),
+  );
+  // Fill the address automatically when exactly one phone is waiting.
+  if (pairing.length === 1 && !$('pair-address').value) $('pair-address').value = pairing[0].address;
+}
+
+function openPair(address = '') {
+  $('pair-address').value = address;
+  $('pair-code').value = '';
+  $('pair-error').hidden = true;
+  setPairBusy(false);
+  pairDialog.showModal();
+  renderPairDetected();
+  ($('pair-address').value ? $('pair-code') : $('pair-address')).focus();
+}
+
+function setPairBusy(busy) {
+  const btn = $('pair-submit');
+  btn.disabled = busy;
+  btn.querySelector('span:last-child').textContent = busy ? 'Đang ghép đôi…' : 'Ghép đôi';
+}
+
+$('btn-pair').addEventListener('click', () => openPair());
+$('pair-x').addEventListener('click', () => pairDialog.close());
+$('pair-cancel').addEventListener('click', () => pairDialog.close());
+$('pair-code').addEventListener('input', (e) => {
+  e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
+});
+
+$('pair-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const address = $('pair-address').value.trim();
+  const code = $('pair-code').value.trim();
+  const error = $('pair-error');
+  error.hidden = true;
+  const fail = (msg, field) => {
+    error.textContent = msg;
+    error.hidden = false;
+    field?.focus();
+  };
+  if (!/^(\[[^\]]+\]|[\w.-]+):\d{1,5}$/.test(address)) return fail('Nhập địa chỉ dạng IP:cổng, ví dụ 192.168.1.23:37159.', $('pair-address'));
+  if (!/^\d{6}$/.test(code)) return fail('Mã ghép đôi gồm 6 chữ số.', $('pair-code'));
+  setPairBusy(true);
+  try {
+    const result = await api('/api/adb/pair', { method: 'POST', body: { address, code } });
+    pairDialog.close();
+    if (result.connected) toast('Đã ghép đôi và kết nối qua Wi-Fi. Bấm “Xem” để mở màn hình.', { type: 'ok', timeout: 6000 });
+    else toast(result.hint || 'Đã ghép đôi.', { type: 'ok', timeout: 10000 });
+  } catch (err) {
+    fail(err.message);
+  } finally {
+    setPairBusy(false);
+  }
+});
+
 function startServerWatch() {
   stopWatching?.();
   stopWatching = watchServerDevices(renderServer, () => showLogin());
@@ -167,9 +304,10 @@ function showLogin() {
   stopWatching?.();
   stopWatching = null;
   $('server-devices').replaceChildren();
+  $('server-discovered').hidden = true;
   $('panel-server').querySelector('.empty')?.remove();
   $('server-login').hidden = false;
-  $('form-connect').hidden = true;
+  $('server-actions').hidden = true;
   $('login-password').focus();
 }
 
@@ -181,7 +319,7 @@ $('server-login').addEventListener('submit', async (e) => {
     await api('/api/login', { method: 'POST', body: { password: $('login-password').value } });
     $('login-password').value = '';
     $('server-login').hidden = true;
-    $('form-connect').hidden = false;
+    $('server-actions').hidden = false;
     $('btn-logout').hidden = false;
     startServerWatch();
   } catch (ex) {
@@ -201,14 +339,7 @@ $('form-connect').addEventListener('submit', async (e) => {
   const input = $('connect-address');
   const address = input.value.trim();
   if (!address) return input.focus();
-  const t = toast(`Đang kết nối ${address}…`, { timeout: 0 });
-  try {
-    const { message } = await api('/api/adb/connect', { method: 'POST', body: { address } });
-    t.done(message);
-    input.value = '';
-  } catch (err) {
-    t.done(err.message, 'error');
-  }
+  if (await connectAddress(address)) input.value = '';
 });
 
 getServerSession().then((session) => {

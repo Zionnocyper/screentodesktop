@@ -56,13 +56,18 @@
             <span class="panel-icon" data-icon="server"></span>
             <div>
               <h2>Thiết bị trên server</h2>
-              <p class="muted" id="server-sub">Điện thoại cắm vào máy chạy server, hoặc kết nối qua ADB Wi-Fi.</p>
+              <p class="muted" id="server-sub">Điện thoại cắm cáp vào máy chạy server, hoặc kết nối không dây qua Wi-Fi.</p>
             </div>
           </div>
-          <form class="inline-form" id="form-connect" autocomplete="off">
-            <input id="connect-address" name="address" placeholder="192.168.1.10:5555" aria-label="Địa chỉ ADB Wi-Fi" />
-            <button class="btn" type="submit"><span data-icon="wifi"></span><span>Kết nối</span></button>
-          </form>
+          <div class="panel-actions" id="server-actions">
+            <button class="btn primary" id="btn-pair" type="button">
+              <span data-icon="link"></span><span>Ghép đôi Wi-Fi</span>
+            </button>
+            <form class="inline-form" id="form-connect" autocomplete="off">
+              <input id="connect-address" name="address" placeholder="IP:cổng, vd 192.168.1.10:5555" aria-label="Địa chỉ ADB Wi-Fi" />
+              <button class="btn" type="submit"><span data-icon="wifi"></span><span>Kết nối</span></button>
+            </form>
+          </div>
         </div>
         <form class="login" id="server-login" hidden autocomplete="on">
           <p>Server này yêu cầu mật khẩu.</p>
@@ -73,6 +78,10 @@
           <p class="error" id="login-error" hidden></p>
         </form>
         <div class="device-grid" id="server-devices"></div>
+        <div class="discovered" id="server-discovered" hidden>
+          <h3><span data-icon="wifi"></span>Tìm thấy trong mạng</h3>
+          <div class="device-grid" id="discovered-list"></div>
+        </div>
       </section>
 
       <section class="panel guide">
@@ -84,6 +93,7 @@
           </li>
           <li>
             Cắm cáp USB. Chọn <b>Thêm thiết bị USB</b> (WebUSB) hoặc dùng danh sách <b>Thiết bị trên server</b>.
+            Không muốn dùng cáp (Android 11+): bật <i>Gỡ lỗi không dây</i> và bấm <b>Ghép đôi Wi-Fi</b>.
           </li>
           <li>Chấp nhận hộp thoại <i>“Cho phép gỡ lỗi USB?”</i> trên điện thoại, rồi bấm <b>Xem</b>.</li>
         </ol>
@@ -213,6 +223,47 @@
         <footer class="dialog-foot">
           <button class="btn ghost" type="button" id="settings-reset">Mặc định</button>
           <button class="btn primary" value="save" type="submit">Lưu</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <dialog class="dialog" id="pair-dialog">
+      <form id="pair-form" autocomplete="off" novalidate>
+        <header class="dialog-head">
+          <h2>Ghép đôi Gỡ lỗi không dây</h2>
+          <button class="icon-btn" type="button" id="pair-x" aria-label="Đóng"><span data-icon="close"></span></button>
+        </header>
+        <div class="dialog-body">
+          <ol class="pair-steps">
+            <li>Điện thoại và máy chạy server dùng <b>cùng mạng Wi-Fi</b>.</li>
+            <li>
+              Trên điện thoại: <i>Tùy chọn nhà phát triển</i> → <b>Gỡ lỗi không dây</b> → bật → chọn
+              <b>Ghép nối thiết bị bằng mã ghép nối</b>.
+            </li>
+            <li>Nhập địa chỉ <i>IP:cổng</i> và <b>mã 6 số</b> đang hiện trên điện thoại.</li>
+          </ol>
+          <div class="pair-detected" id="pair-detected" hidden>
+            <span class="muted">Điện thoại đang chờ ghép đôi:</span>
+            <div class="chips" id="pair-chips"></div>
+          </div>
+          <p class="hint" id="pair-mdns-off" hidden>
+            adb trên server không bật mDNS nên không tự tìm được điện thoại. Vẫn ghép đôi được bằng IP:cổng.
+          </p>
+          <div class="fields">
+            <label class="field">
+              <span>IP:cổng ghép đôi</span>
+              <input id="pair-address" name="address" placeholder="192.168.1.23:37159" inputmode="url" required />
+            </label>
+            <label class="field">
+              <span>Mã ghép đôi</span>
+              <input id="pair-code" name="code" class="code-input" placeholder="••••••" inputmode="numeric" maxlength="6" pattern="\d{6}" required />
+            </label>
+          </div>
+          <p class="error" id="pair-error" hidden></p>
+        </div>
+        <footer class="dialog-foot">
+          <button class="btn ghost" type="button" id="pair-cancel">Hủy</button>
+          <button class="btn primary" type="submit" id="pair-submit"><span data-icon="link"></span><span>Ghép đôi</span></button>
         </footer>
       </form>
     </dialog>

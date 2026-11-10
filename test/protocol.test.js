@@ -4,7 +4,7 @@ import * as C from '../web/src/scrcpy/control.js';
 import { ByteQueue, StreamClosedError, u32 } from '../web/src/scrcpy/byte-queue.js';
 import { annexBNalUnits, h264CodecString } from '../web/src/scrcpy/video.js';
 import { buildServerCommand, normalizeOptions, socketService } from '../web/src/shared/scrcpy-options.js';
-import { parseDeviceList } from '../server/adb.js';
+import { parseDeviceList, parseMdnsServices } from '../server/adb.js';
 
 const hex = (u8) => Buffer.from(u8).toString('hex');
 
@@ -116,4 +116,22 @@ test('parse adb devices -l output', () => {
   );
   assert.equal(list[1].state, 'unauthorized');
   assert.equal(list[2].state, 'no permissions');
+});
+
+test('parse adb mdns services output', () => {
+  const list = parseMdnsServices(
+    'adb-10AEBS0G2D0029Y-Xy12Ab\t_adb-tls-pairing._tcp\t192.168.1.23:37159\n' +
+      'adb-10AEBS0G2D0029Y-Xy12Ab\t_adb-tls-connect._tcp.\t192.168.1.23:41235\n' +
+      'List of discovered mdns services\n',
+  );
+  assert.equal(list.length, 2);
+  assert.deepEqual(list[0], {
+    instance: 'adb-10AEBS0G2D0029Y-Xy12Ab',
+    service: '_adb-tls-pairing._tcp',
+    address: '192.168.1.23:37159',
+    type: 'pairing',
+    serialHint: '10AEBS0G2D0029Y',
+  });
+  assert.equal(list[1].type, 'connect');
+  assert.equal(list[1].service, '_adb-tls-connect._tcp');
 });

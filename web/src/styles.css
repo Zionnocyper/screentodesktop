@@ -281,6 +281,94 @@ select:focus {
   gap: 8px;
   flex-wrap: wrap;
 }
+.panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.discovered {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border);
+}
+.discovered h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  color: var(--muted);
+}
+.discovered h3 .icon {
+  width: 18px;
+  height: 18px;
+}
+.discovered .device-grid {
+  margin-top: 12px;
+}
+
+.dialog-body {
+  padding: 0 18px 8px;
+  display: grid;
+  gap: 14px;
+}
+.dialog-body .fields {
+  padding: 0;
+}
+.pair-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+.pair-detected {
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 99px;
+  border: 1px solid color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: var(--accent-soft);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+}
+.chip .icon {
+  width: 16px;
+  height: 16px;
+  color: var(--accent);
+}
+.chip small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--warn);
+}
+.code-input {
+  font: 600 20px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+  letter-spacing: 0.35em;
+  text-align: center;
+}
+.dialog .error {
+  margin: 0;
+  white-space: pre-line;
+}
 .inline-form input {
   width: 210px;
   flex: 1 1 160px;
@@ -393,6 +481,10 @@ select:focus {
 .device-hint {
   font-size: 13px;
   color: var(--warn);
+}
+.device-note {
+  font-size: 13px;
+  color: var(--muted);
 }
 .device-actions {
   display: flex;

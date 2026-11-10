@@ -16,6 +16,22 @@ import { SCRCPY_VERSION, SERVER_FILENAME } from '../web/src/shared/scrcpy-option
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const env = process.env;
 
+/** adb from ADB_PATH, ./platform-tools in the project, the Android SDK, or PATH. */
+function findAdb() {
+  if (env.ADB_PATH) return env.ADB_PATH;
+  const exe = process.platform === 'win32' ? 'adb.exe' : 'adb';
+  const home = env.USERPROFILE || env.HOME || '';
+  const candidates = [
+    path.join(ROOT, 'platform-tools', exe),
+    env.ANDROID_HOME && path.join(env.ANDROID_HOME, 'platform-tools', exe),
+    env.ANDROID_SDK_ROOT && path.join(env.ANDROID_SDK_ROOT, 'platform-tools', exe),
+    env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Android', 'Sdk', 'platform-tools', exe),
+    path.join(home, 'Library', 'Android', 'sdk', 'platform-tools', exe),
+    path.join(home, 'Android', 'Sdk', 'platform-tools', exe),
+  ].filter(Boolean);
+  return candidates.find((p) => fs.existsSync(p)) ?? 'adb';
+}
+
 const config = {
   host: env.HOST || '127.0.0.1',
   port: Number(env.PORT || 8000),
@@ -24,7 +40,7 @@ const config = {
   trustProxy: env.TRUST_PROXY === '1' || env.TRUST_PROXY === 'true',
   adbHost: env.ADB_HOST || '127.0.0.1',
   adbPort: Number(env.ADB_PORT || 5037),
-  adbPath: env.ADB_PATH || 'adb',
+  adbPath: findAdb(),
   tlsCert: env.TLS_CERT || '',
   tlsKey: env.TLS_KEY || '',
   maxUploadBytes: Number(env.MAX_UPLOAD_MB || 2048) * 1024 * 1024,
@@ -130,6 +146,58 @@ function checkSerial(serial) {
   return d;
 }
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** adb's English messages -> short Vietnamese explanations. */
+function translateAdbError(message = '') {
+  const m = String(message);
+  if (/Wrong password|connection was dropped/i.test(m)) {
+    return 'Sai mã ghép đôi hoặc kết nối bị ngắt. Mã và cổng ghép đôi đổi mỗi lần mở lại hộp thoại trên điện thoại.';
+  }
+  if (/Unable to start pairing client|unable to create pairing client/i.test(m)) {
+    return 'Không kết nối được tới điện thoại. Kiểm tra IP:cổng ghép đôi và hai máy cùng mạng Wi-Fi.';
+  }
+  if (/parse address|Invalid port/i.test(m)) return 'Địa chỉ không hợp lệ.';
+  if (/Hết thời gian/i.test(m)) return 'Hết thời gian chờ. Hộp thoại ghép đôi trên điện thoại còn mở không?';
+  if (/failed to authenticate|authentication/i.test(m)) {
+    return `${m}\nĐiện thoại chưa ghép đôi với server này: dùng "Ghép đôi Wi-Fi".`;
+  }
+  if (/failed to connect|cannot connect|No route|refused|timed out/i.test(m)) {
+    return `${m}\nKiểm tra IP:cổng (xem trong Gỡ lỗi không dây) và hai máy cùng mạng.`;
+  }
+  return m;
+}
+
+/**
+ * After pairing, make sure the phone gets connected. adb auto-connects paired
+ * phones it discovers through mDNS, but only on discovery events, so if the
+ * phone was already discovered before pairing we connect it ourselves.
+ * The pairing guid is the mDNS instance name of the phone's connect service.
+ */
+async function connectPaired(guid) {
+  const deadline = Date.now() + 12_000;
+  let message = null;
+  let requested = false;
+  while (Date.now() < deadline) {
+    const dev = devices.list().find((d) => guid && (d.serial.startsWith(`${guid}.`) || d.serial === guid));
+    if (dev?.state === 'device') return { connected: true, serial: dev.serial };
+    if (!dev && !requested && guid) {
+      const services = await adb.mdnsServices().catch(() => []);
+      const target = services.find((s) => s.type === 'connect' && s.instance === guid);
+      if (target) {
+        message = await adb.connectDevice(`${target.instance}.${target.service}`).catch((e) => e.message);
+        requested = /connected to/i.test(message);
+      }
+    }
+    await sleep(800);
+  }
+  return {
+    connected: false,
+    hint: 'Đã ghép đôi. Bật "Gỡ lỗi không dây" trên điện thoại; máy sẽ tự hiện trong danh sách, hoặc nhập IP:cổng hiển thị ở đó vào ô Kết nối.',
+    connectMessage: message,
+  };
+}
+
 function shellQuote(s) {
   return `'${String(s).replace(/'/g, `'\\''`)}'`;
 }
@@ -174,7 +242,7 @@ async function handleApi(req, res, url) {
   if (!auth.isAuthenticated(req)) return sendJson(res, 401, { error: 'Cần đăng nhập' });
 
   if (pathname === '/api/devices' && method === 'GET') {
-    return sendJson(res, 200, { devices: devices.list(), error: devices.error });
+    return sendJson(res, 200, devices.snapshot());
   }
 
   if (pathname === '/api/devices/events' && method === 'GET') {
@@ -184,7 +252,7 @@ async function handleApi(req, res, url) {
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
-    const push = () => res.write(`data: ${JSON.stringify({ devices: devices.list(), error: devices.error })}\n\n`);
+    const push = () => res.write(`data: ${JSON.stringify(devices.snapshot())}\n\n`);
     push();
     devices.on('change', push);
     const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
@@ -197,11 +265,35 @@ async function handleApi(req, res, url) {
 
   if (pathname === '/api/adb/connect' && method === 'POST') {
     const { address } = await readJson(req);
-    if (!/^[\w.\-]+(:\d{1,5})?$/.test(String(address ?? ''))) return sendJson(res, 400, { error: 'Địa chỉ không hợp lệ (ví dụ 192.168.1.10:5555)' });
-    const addr = String(address).includes(':') ? address : `${address}:5555`;
+    const value = String(address ?? '').trim();
+    if (!/^(\[[0-9a-fA-F:.%\w]+\]|[\w.\-]+)(:\d{1,5})?$/.test(value)) {
+      return sendJson(res, 400, { error: 'Địa chỉ không hợp lệ (ví dụ 192.168.1.10:5555)' });
+    }
+    // mDNS service names (adb-xxx._adb-tls-connect._tcp) are passed as-is
+    const isMdns = /\._adb(-tls-connect)?\._tcp$/.test(value);
+    const addr = isMdns || /:\d{1,5}$/.test(value) ? value : `${value}:5555`;
     const message = await adb.connectDevice(addr);
     const ok = /connected to/i.test(message);
-    return sendJson(res, ok ? 200 : 502, ok ? { ok, message } : { error: message });
+    return sendJson(res, ok ? 200 : 502, ok ? { ok, message } : { error: translateAdbError(message) });
+  }
+
+  if (pathname === '/api/adb/pair' && method === 'POST') {
+    const body = await readJson(req);
+    const address = String(body.address ?? '').trim();
+    const code = String(body.code ?? '').replace(/\s/g, '');
+    if (!/^(\[[0-9a-fA-F:.%\w]+\]|[\w.\-]+):\d{1,5}$/.test(address)) {
+      return sendJson(res, 400, { error: 'Địa chỉ ghép đôi phải có dạng IP:cổng, ví dụ 192.168.1.23:37159' });
+    }
+    if (!/^\d{6}$/.test(code)) return sendJson(res, 400, { error: 'Mã ghép đôi gồm 6 chữ số' });
+    let paired;
+    try {
+      paired = await adb.pair(address, code);
+    } catch (err) {
+      return sendJson(res, 502, { error: translateAdbError(err.message), detail: err.message });
+    }
+    console.log(`[adb] ${paired.message}`);
+    const result = await connectPaired(paired.guid);
+    return sendJson(res, 200, { ok: true, message: paired.message, ...result });
   }
 
   if (pathname === '/api/adb/disconnect' && method === 'POST') {
@@ -314,7 +406,7 @@ server.listen(config.port, config.host, async () => {
     console.warn('          Đặt ACCESS_PASSWORD=... để bật đăng nhập.');
   }
   try {
-    console.log(`adb server: ${config.adbHost}:${config.adbPort} (version ${await adb.version()})`);
+    console.log(`adb server: ${config.adbHost}:${config.adbPort} (version ${await adb.version()}, ${config.adbPath})`);
   } catch (err) {
     console.warn(`Chưa kết nối được adb server: ${err.message}`);
   }

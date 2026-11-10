@@ -4,6 +4,9 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
+    # Tự tìm điện thoại qua Wi-Fi (mDNS) cần mạng của máy chủ: bỏ comment dòng dưới
+    # (khi đó "ports" bị bỏ qua, server nghe trực tiếp cổng 8000 của máy chủ)
+    # network_mode: host
     environment:
       # BẮT BUỘC đổi mật khẩu khi mở ra Internet/LAN
       ACCESS_PASSWORD: "doi-mat-khau-nay"

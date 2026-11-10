@@ -20,7 +20,29 @@ const fake = {
   abstractConnections: 0,
   controlReceived: [],
   videoSent: null,
+  // Wireless debugging: what the fake adb server sees through mDNS
+  wifiGuid: 'adb-FAKEWIFI-AbC123',
+  wifiConnected: false,
+  pairAttempts: [],
+  trackers: new Set(),
 };
+const WIFI_SERIAL = () => `${fake.wifiGuid}._adb-tls-connect._tcp`;
+
+function deviceListText() {
+  let text = `${SERIAL}\tdevice product:fake model:Fake_Phone device:fake transport_id:1\n`;
+  if (fake.wifiConnected) text += `${WIFI_SERIAL()}\tdevice product:fake model:Fake_Phone device:fake transport_id:2\n`;
+  return text;
+}
+
+function mdnsServicesText() {
+  let text = `${fake.wifiGuid}\t_adb-tls-pairing._tcp\t192.168.1.50:37000\n`;
+  text += `${fake.wifiGuid}\t_adb-tls-connect._tcp\t192.168.1.50:41000\n`;
+  return text;
+}
+
+function notifyTrackers() {
+  for (const s of fake.trackers) s.write(okayString(deviceListText()).subarray(4));
+}
 
 function hex4(n) {
   return n.toString(16).padStart(4, '0');
@@ -155,10 +177,33 @@ function startFakeAdb() {
         if (service === 'host:version') socket.end(okayString('0029'));
         else if (service === 'host:devices-l' || service === 'host:track-devices-l') {
           socket.write('OKAY');
-          const list = okayString(`${SERIAL}\tdevice product:fake model:Fake_Phone device:fake transport_id:1\n`).subarray(4);
+          const list = okayString(deviceListText()).subarray(4);
           if (service === 'host:devices-l') socket.end(list);
-          else socket.write(list);
-        } else if (service === `host:transport:${SERIAL}`) {
+          else {
+            socket.write(list);
+            fake.trackers.add(socket);
+            socket.on('close', () => fake.trackers.delete(socket));
+          }
+        } else if (service === 'host:mdns:check') socket.end(okayString('mdns daemon version [adb discovery 0.0.0]'));
+        else if (service === 'host:mdns:services') socket.end(okayString(mdnsServicesText()));
+        else if (service.startsWith('host:pair:')) {
+          // like adb: OKAY first, then a length-prefixed message or FAIL + reason
+          const [, , code, ...addr] = service.split(':');
+          fake.pairAttempts.push({ code, address: addr.join(':') });
+          socket.write('OKAY');
+          setTimeout(() => {
+            if (code === '123456') {
+              socket.end(okayString(`Successfully paired to ${addr.join(':')} [guid=${fake.wifiGuid}]`).subarray(4));
+            } else socket.end(fail('Failed: Wrong password or connection was dropped.'));
+          }, 50);
+        } else if (service.startsWith('host:connect:')) {
+          const target = service.slice('host:connect:'.length);
+          if (target === WIFI_SERIAL() && fake.pairAttempts.some((p) => p.code === '123456')) {
+            fake.wifiConnected = true;
+            socket.end(okayString(`connected to ${target}`));
+            setTimeout(notifyTrackers, 20);
+          } else socket.end(okayString(`failed to connect to '${target}'`));
+        } else if (service === `host:transport:${SERIAL}` || (fake.wifiConnected && service === `host:transport:${WIFI_SERIAL()}`)) {
           transport = true;
           socket.write('OKAY');
         } else socket.end(fail('device not found'));
@@ -330,4 +375,52 @@ test('cross-origin POST is rejected', async () => {
     body: '{"address":"1.2.3.4"}',
   });
   assert.equal(r.status, 403);
+});
+
+test('mDNS discovery lists phones waiting for pairing / with Wireless debugging on', async () => {
+  const data = await waitFor(async () => {
+    const j = await (await fetch(`${base()}/api/devices`)).json();
+    return j.discovered?.length === 2 ? j : null;
+  });
+  assert.equal(data.mdns, true);
+  const pairing = data.discovered.find((s) => s.type === 'pairing');
+  const connect = data.discovered.find((s) => s.type === 'connect');
+  assert.equal(pairing.address, '192.168.1.50:37000');
+  assert.equal(pairing.serialHint, 'FAKEWIFI');
+  assert.equal(connect.target, WIFI_SERIAL());
+  assert.equal(connect.connected, false);
+});
+
+test('pairing validates input and reports a wrong code in Vietnamese', async () => {
+  const post = (body) =>
+    fetch(`${base()}/api/adb/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: base() }, body: JSON.stringify(body) });
+  assert.equal((await post({ address: '192.168.1.50', code: '123456' })).status, 400);
+  assert.equal((await post({ address: '192.168.1.50:37000', code: '12ab' })).status, 400);
+  assert.equal((await post({ address: '1.2.3.4:5;rm -rf /', code: '123456' })).status, 400);
+  const wrong = await post({ address: '192.168.1.50:37000', code: '000000' });
+  assert.equal(wrong.status, 502);
+  assert.match((await wrong.json()).error, /Sai mã ghép đôi/);
+  assert.equal(fake.wifiConnected, false);
+});
+
+test('pairing with the right code connects the phone over Wi-Fi', async () => {
+  const r = await fetch(`${base()}/api/adb/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base() },
+    body: JSON.stringify({ address: '192.168.1.50:37000', code: '123 456' }),
+  });
+  const j = await r.json();
+  assert.equal(r.status, 200, JSON.stringify(j));
+  assert.equal(j.connected, true);
+  assert.equal(j.serial, WIFI_SERIAL());
+  assert.deepEqual(fake.pairAttempts.at(-1), { code: '123456', address: '192.168.1.50:37000' });
+
+  const data = await waitFor(async () => {
+    const d = await (await fetch(`${base()}/api/devices`)).json();
+    const wifi = d.devices.find((x) => x.serial === WIFI_SERIAL());
+    return wifi?.manufacturer && d.discovered.find((s) => s.type === 'connect')?.connected ? d : null;
+  });
+  const wifi = data.devices.find((x) => x.serial === WIFI_SERIAL());
+  assert.equal(wifi.wireless, true);
+  assert.equal(wifi.address, '192.168.1.50:41000');
 });

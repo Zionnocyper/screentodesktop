@@ -136,6 +136,31 @@ export function parseDeviceList(text) {
   return devices;
 }
 
+/**
+ * Parses the output of host:mdns:services ("instance\tservice\tip:port" lines).
+ * _adb-tls-pairing: a phone showing "Pair device with pairing code"
+ * _adb-tls-connect: a phone with Wireless debugging on (instance name = its guid)
+ */
+export function parseMdnsServices(text) {
+  const out = [];
+  for (const line of text.split('\n')) {
+    const parts = line.trim().split('\t');
+    if (parts.length < 3) continue;
+    const [instance, rawService, address] = parts;
+    const service = rawService.replace(/\.$/, '');
+    const type = service.startsWith('_adb-tls-pairing')
+      ? 'pairing'
+      : service.startsWith('_adb-tls-connect')
+        ? 'connect'
+        : service.startsWith('_adb.')
+          ? 'legacy'
+          : 'other';
+    const hint = /^adb-(.+)-[A-Za-z0-9]+$/.exec(instance);
+    out.push({ instance, service, address, type, serialHint: hint?.[1] ?? null });
+  }
+  return out;
+}
+
 export class AdbClient {
   #startPromise = null;
 
@@ -229,6 +254,36 @@ export class AdbClient {
 
   async disconnectDevice(address) {
     return this.hostQuery(`host:disconnect:${address}`);
+  }
+
+  /**
+   * `adb pair host:port code` (Android 11+ Wireless debugging).
+   * The adb server answers OKAY, then either a length-prefixed success
+   * message or FAIL + reason. Returns { message, guid }.
+   */
+  async pair(address, code, { timeoutMs = 45_000 } = {}) {
+    const { socket, reader } = await this.openHostService(`host:pair:${code}:${address}`);
+    const timer = setTimeout(() => socket.destroy(new AdbError('Hết thời gian chờ ghép đôi')), timeoutMs);
+    try {
+      const head = (await reader.read(4)).toString('ascii');
+      if (head === 'FAIL') throw new AdbError(await readHexString(reader));
+      const len = parseInt(head, 16);
+      if (Number.isNaN(len)) throw new AdbError('Malformed adb response');
+      const message = (await reader.read(len)).toString('utf8');
+      return { message, guid: /\[guid=([^\]]+)\]/.exec(message)?.[1] ?? null };
+    } finally {
+      clearTimeout(timer);
+      socket.destroy();
+    }
+  }
+
+  /** Whether the adb server has mDNS discovery enabled. */
+  async mdnsAvailable() {
+    return !/ERROR|disabled/i.test(await this.hostQuery('host:mdns:check'));
+  }
+
+  async mdnsServices() {
+    return parseMdnsServices(await this.hostQuery('host:mdns:services'));
   }
 
   /**

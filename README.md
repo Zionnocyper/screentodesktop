@@ -9,7 +9,7 @@ Hiển thị và điều khiển điện thoại Android ngay trên trình duy�
 - Âm thanh (Android 11+), đồng bộ clipboard hai chiều, chụp màn hình
 - Kéo-thả file: APK được cài đặt, file khác vào thư mục `Download`
 - Nút Back / Home / Đa nhiệm / âm lượng / nguồn / xoay / thông báo / tắt màn hình điện thoại
-- ADB qua Wi-Fi (một nút bấm để rút cáp)
+- Không dây qua Wi-Fi: ghép đôi *Gỡ lỗi không dây* bằng mã 6 số ngay trên web, tự tìm điện thoại trong mạng (mDNS)
 - Có mật khẩu đăng nhập khi deploy lên server
 
 Phần chạy trên điện thoại là [scrcpy-server](https://github.com/Genymobile/scrcpy) v5.0.1 (được đẩy lên tự động, không cần cài app nào trên điện thoại).
@@ -20,8 +20,8 @@ Phần chạy trên điện thoại là [scrcpy-server](https://github.com/Genym
  (1) WebUSB — điện thoại cắm vào máy đang mở trình duyệt
      Trình duyệt ──USB/ADB──▶ điện thoại            (không cần server, chỉ cần file tĩnh)
 
- (2) Server — điện thoại cắm vào máy chạy server (hoặc ADB Wi-Fi)
-     Trình duyệt ◀──WebSocket──▶ Node.js ──adb (tcp:5037)──▶ điện thoại
+ (2) Server — điện thoại cắm cáp vào máy chạy server, hoặc nối không dây qua Wi-Fi
+     Trình duyệt ◀──WebSocket──▶ Node.js ──adb (tcp:5037)──USB / Wi-Fi──▶ điện thoại
 ```
 
 | | WebUSB | Server |
@@ -29,6 +29,7 @@ Phần chạy trên điện thoại là [scrcpy-server](https://github.com/Genym
 | Trình duyệt | Chrome / Edge (máy tính, Android) | Chrome, Edge, Firefox 130+, Safari 17+ |
 | Yêu cầu | HTTPS hoặc `http://localhost` | Node.js 20+ và `adb` trên máy chủ |
 | Xem từ xa | Không (điện thoại phải cắm vào máy đang xem) | Có, từ bất kỳ đâu |
+| Không dây (Wi-Fi) | Không (trình duyệt không mở được kết nối TCP) | Có |
 
 Cả hai dùng chung phần giải mã và điều khiển; trang web tự hiện chế độ nào khả dụng.
 
@@ -40,7 +41,7 @@ Cả hai dùng chung phần giải mã và điều khiển; trang web tự hiệ
 
 ## Chạy trên máy cá nhân
 
-Cần [Node.js](https://nodejs.org) 20+ và [Android platform-tools](https://developer.android.com/tools/releases/platform-tools) (`adb` có trong PATH, hoặc đặt `ADB_PATH`).
+Cần [Node.js](https://nodejs.org) 20+ và [Android platform-tools](https://developer.android.com/tools/releases/platform-tools). Giải nén thư mục `platform-tools` vào thư mục dự án là server tự tìm thấy `adb` (hoặc để `adb` trong PATH, Android SDK, hay đặt `ADB_PATH`).
 
 ```bash
 npm install        # tự tải scrcpy-server và kiểm tra SHA-256
@@ -139,13 +140,30 @@ Thư mục `dist/` sau khi `npm run build` là một website tĩnh hoàn chỉnh
 | `TRUST_PROXY` | `0` | `1` khi đứng sau reverse proxy (đọc `X-Forwarded-*`) |
 | `TLS_CERT`, `TLS_KEY` | | Đường dẫn chứng chỉ để chạy HTTPS trực tiếp |
 | `ADB_HOST`, `ADB_PORT` | `127.0.0.1`, `5037` | adb server cần kết nối |
-| `ADB_PATH` | `adb` | Đường dẫn file `adb` (dùng để tự khởi động adb server) |
+| `ADB_PATH` | *(tự tìm)* | Đường dẫn file `adb` (dùng để tự khởi động adb server) |
 | `MAX_UPLOAD_MB` | `2048` | Giới hạn kích thước file kéo-thả |
 
-## ADB qua Wi-Fi
+## Không dây qua Wi-Fi (chế độ server)
 
-- Điện thoại đang cắm USB vào server: bấm nút **Wi-Fi** trên thẻ thiết bị → server bật `adb tcpip 5555` và tự kết nối tới IP của điện thoại; sau đó rút cáp được.
-- Hoặc nhập `IP:cổng` vào ô **Kết nối** (Android 11+ dùng *Gỡ lỗi không dây* thì cần ghép nối một lần bằng `adb pair IP:cổng` trên máy chủ).
+Bluetooth không dùng được (ADB không hỗ trợ, băng thông quá thấp). Wi-Fi có 3 cách, cáp USB vẫn dùng song song bình thường:
+
+**1. Ghép đôi Gỡ lỗi không dây — không cần cáp (Android 11+, khuyên dùng)**
+
+1. Điện thoại và máy chạy server cùng mạng Wi-Fi.
+2. Điện thoại: *Tùy chọn nhà phát triển* → **Gỡ lỗi không dây** → bật → **Ghép nối thiết bị bằng mã ghép nối**.
+3. Trên web bấm **Ghép đôi Wi-Fi** (hoặc nút *Ghép đôi* trên thẻ điện thoại ở mục *Tìm thấy trong mạng* — địa chỉ được điền sẵn), nhập **mã 6 số** đang hiện trên điện thoại.
+4. Server ghép đôi rồi tự kết nối; điện thoại hiện trong danh sách, bấm **Xem**.
+
+Chỉ cần ghép đôi **một lần**. Những lần sau chỉ việc bật *Gỡ lỗi không dây*: adb server tự tìm (mDNS) và tự kết nối, dù cổng có đổi. Nếu chưa tự kết nối, thẻ điện thoại hiện ở mục *Tìm thấy trong mạng* với nút **Kết nối**.
+
+**2. Từ cáp sang Wi-Fi:** điện thoại đang cắm cáp vào server → bấm nút **Wi-Fi** trên thẻ thiết bị (bật `adb tcpip 5555` và tự kết nối), rồi rút cáp. Phải làm lại sau khi điện thoại khởi động lại.
+
+**3. Nhập tay:** gõ `IP:cổng` vào ô **Kết nối**.
+
+Lưu ý:
+- Tự tìm điện thoại dùng mDNS (multicast) nên server phải ở **cùng mạng LAN** với điện thoại. Với Docker cần `network_mode: host` (xem `docker-compose.yml`).
+- Một số router bật *AP isolation* / mạng khách chặn các thiết bị thấy nhau — khi đó không kết nối được.
+- Wi-Fi trễ hơn cáp một chút; nên đặt bitrate 4–8 Mbps trong *Chất lượng*.
 
 ## Điều khiển
 
