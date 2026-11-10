@@ -11,6 +11,8 @@ import { AdbClient } from './adb.js';
 import { DeviceManager } from './devices.js';
 import { Auth } from './auth.js';
 import { handleStreamSocket } from './stream.js';
+import { QrPairing } from './qr-pairing.js';
+import { explainAdbError, langOf, t } from './i18n.js';
 import { SCRCPY_VERSION, SERVER_FILENAME } from '../web/src/shared/scrcpy-options.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -108,7 +110,7 @@ async function readJson(req, limit = 64 * 1024) {
 function serveStatic(req, res, pathname) {
   if (!fs.existsSync(config.distDir)) {
     res.writeHead(503, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Chưa build giao diện. Chạy: npm run build');
+    res.end('Chưa build giao diện / The web app is not built.\nChạy / Run: npm run build');
     return;
   }
   let rel;
@@ -138,35 +140,15 @@ function serveStatic(req, res, pathname) {
 }
 
 const SERIAL_RE = /^[\w.:\-[\]@%]+$/;
-function checkSerial(serial) {
-  if (!serial || !SERIAL_RE.test(serial)) throw Object.assign(new Error('Serial không hợp lệ'), { status: 400 });
+function checkSerial(serial, lang) {
+  if (!serial || !SERIAL_RE.test(serial)) throw Object.assign(new Error(t(lang, 'badSerial')), { status: 400 });
   const d = devices.get(serial);
-  if (!d) throw Object.assign(new Error('Không tìm thấy thiết bị'), { status: 404 });
-  if (d.state !== 'device') throw Object.assign(new Error(`Thiết bị đang ở trạng thái "${d.state}"`), { status: 409 });
+  if (!d) throw Object.assign(new Error(t(lang, 'deviceNotFound')), { status: 404 });
+  if (d.state !== 'device') throw Object.assign(new Error(t(lang, 'deviceState', { state: d.state })), { status: 409 });
   return d;
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/** adb's English messages -> short Vietnamese explanations. */
-function translateAdbError(message = '') {
-  const m = String(message);
-  if (/Wrong password|connection was dropped/i.test(m)) {
-    return 'Sai mã ghép đôi hoặc kết nối bị ngắt. Mã và cổng ghép đôi đổi mỗi lần mở lại hộp thoại trên điện thoại.';
-  }
-  if (/Unable to start pairing client|unable to create pairing client/i.test(m)) {
-    return 'Không kết nối được tới điện thoại. Kiểm tra IP:cổng ghép đôi và hai máy cùng mạng Wi-Fi.';
-  }
-  if (/parse address|Invalid port/i.test(m)) return 'Địa chỉ không hợp lệ.';
-  if (/Hết thời gian/i.test(m)) return 'Hết thời gian chờ. Hộp thoại ghép đôi trên điện thoại còn mở không?';
-  if (/failed to authenticate|authentication/i.test(m)) {
-    return `${m}\nĐiện thoại chưa ghép đôi với server này: dùng "Ghép đôi Wi-Fi".`;
-  }
-  if (/failed to connect|cannot connect|No route|refused|timed out/i.test(m)) {
-    return `${m}\nKiểm tra IP:cổng (xem trong Gỡ lỗi không dây) và hai máy cùng mạng.`;
-  }
-  return m;
-}
 
 /**
  * After pairing, make sure the phone gets connected. adb auto-connects paired
@@ -174,7 +156,7 @@ function translateAdbError(message = '') {
  * phone was already discovered before pairing we connect it ourselves.
  * The pairing guid is the mDNS instance name of the phone's connect service.
  */
-async function connectPaired(guid) {
+async function connectPaired(guid, lang = 'vi') {
   const deadline = Date.now() + 12_000;
   let message = null;
   let requested = false;
@@ -193,10 +175,12 @@ async function connectPaired(guid) {
   }
   return {
     connected: false,
-    hint: 'Đã ghép đôi. Bật "Gỡ lỗi không dây" trên điện thoại; máy sẽ tự hiện trong danh sách, hoặc nhập IP:cổng hiển thị ở đó vào ô Kết nối.',
+    hint: t(lang, 'pairedHint'),
     connectMessage: message,
   };
 }
+
+const qrPairing = new QrPairing({ adb, connectPaired, explain: explainAdbError });
 
 function shellQuote(s) {
   return `'${String(s).replace(/'/g, `'\\''`)}'`;
@@ -213,6 +197,7 @@ function safeFileName(name) {
 async function handleApi(req, res, url) {
   const { pathname } = url;
   const method = req.method;
+  const lang = langOf(req, url);
 
   if (method !== 'GET' && method !== 'HEAD' && !auth.sameOrigin(req)) {
     return sendJson(res, 403, { error: 'Cross-origin request blocked' });
@@ -231,18 +216,18 @@ async function handleApi(req, res, url) {
     const result = auth.login(req, String(body.password ?? ''));
     if (result.ok) return sendJson(res, 200, { ok: true }, { 'Set-Cookie': result.cookie });
     if (result.retryAfter) {
-      return sendJson(res, 429, { error: `Thử lại sau ${result.retryAfter}s` }, { 'Retry-After': String(result.retryAfter) });
+      return sendJson(res, 429, { error: t(lang, 'retryAfter', { s: result.retryAfter }) }, { 'Retry-After': String(result.retryAfter) });
     }
-    return sendJson(res, 401, { error: 'Sai mật khẩu' });
+    return sendJson(res, 401, { error: t(lang, 'wrongPassword') });
   }
   if (pathname === '/api/logout' && method === 'POST') {
     return sendJson(res, 200, { ok: true }, { 'Set-Cookie': auth.logout(req) });
   }
 
-  if (!auth.isAuthenticated(req)) return sendJson(res, 401, { error: 'Cần đăng nhập' });
+  if (!auth.isAuthenticated(req)) return sendJson(res, 401, { error: t(lang, 'authRequired') });
 
   if (pathname === '/api/devices' && method === 'GET') {
-    return sendJson(res, 200, devices.snapshot());
+    return sendJson(res, 200, devices.snapshot(lang));
   }
 
   if (pathname === '/api/devices/events' && method === 'GET') {
@@ -252,7 +237,7 @@ async function handleApi(req, res, url) {
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
-    const push = () => res.write(`data: ${JSON.stringify(devices.snapshot())}\n\n`);
+    const push = () => res.write(`data: ${JSON.stringify(devices.snapshot(lang))}\n\n`);
     push();
     devices.on('change', push);
     const ping = setInterval(() => res.write(': ping\n\n'), 25_000);
@@ -267,14 +252,17 @@ async function handleApi(req, res, url) {
     const { address } = await readJson(req);
     const value = String(address ?? '').trim();
     if (!/^(\[[0-9a-fA-F:.%\w]+\]|[\w.\-]+)(:\d{1,5})?$/.test(value)) {
-      return sendJson(res, 400, { error: 'Địa chỉ không hợp lệ (ví dụ 192.168.1.10:5555)' });
+      return sendJson(res, 400, { error: t(lang, 'badAddress') });
     }
     // mDNS service names (adb-xxx._adb-tls-connect._tcp) are passed as-is
     const isMdns = /\._adb(-tls-connect)?\._tcp$/.test(value);
     const addr = isMdns || /:\d{1,5}$/.test(value) ? value : `${value}:5555`;
     const message = await adb.connectDevice(addr);
     const ok = /connected to/i.test(message);
-    return sendJson(res, ok ? 200 : 502, ok ? { ok, message } : { error: translateAdbError(message) });
+    if (ok) return sendJson(res, 200, { ok, message });
+    // A phone found through mDNS that refuses us is almost always not paired yet.
+    const error = /\._adb-tls-connect\._tcp$/.test(value) ? t(lang, 'notPaired', { m: message }) : explainAdbError(lang, { message });
+    return sendJson(res, 502, { error });
   }
 
   if (pathname === '/api/adb/pair' && method === 'POST') {
@@ -282,23 +270,39 @@ async function handleApi(req, res, url) {
     const address = String(body.address ?? '').trim();
     const code = String(body.code ?? '').replace(/\s/g, '');
     if (!/^(\[[0-9a-fA-F:.%\w]+\]|[\w.\-]+):\d{1,5}$/.test(address)) {
-      return sendJson(res, 400, { error: 'Địa chỉ ghép đôi phải có dạng IP:cổng, ví dụ 192.168.1.23:37159' });
+      return sendJson(res, 400, { error: t(lang, 'badPairAddress') });
     }
-    if (!/^\d{6}$/.test(code)) return sendJson(res, 400, { error: 'Mã ghép đôi gồm 6 chữ số' });
+    if (!/^\d{6}$/.test(code)) return sendJson(res, 400, { error: t(lang, 'badCode') });
     let paired;
     try {
       paired = await adb.pair(address, code);
     } catch (err) {
-      return sendJson(res, 502, { error: translateAdbError(err.message), detail: err.message });
+      return sendJson(res, 502, { error: explainAdbError(lang, err), detail: err.message });
     }
     console.log(`[adb] ${paired.message}`);
-    const result = await connectPaired(paired.guid);
+    const result = await connectPaired(paired.guid, lang);
     return sendJson(res, 200, { ok: true, message: paired.message, ...result });
+  }
+
+  // QR pairing: create a code, then poll its state
+  if (pathname === '/api/adb/qr' && method === 'POST') {
+    const session = qrPairing.create(lang);
+    return sendJson(res, 200, { ...qrPairing.view(session, { withQr: true }), mdns: devices.mdns });
+  }
+  const qr = /^\/api\/adb\/qr\/([\w-]{10,40})$/.exec(pathname);
+  if (qr) {
+    if (method === 'DELETE') {
+      qrPairing.cancel(qr[1]);
+      return sendJson(res, 200, { ok: true });
+    }
+    const session = qrPairing.get(qr[1]);
+    if (!session) return sendJson(res, 404, { error: 'Not found' });
+    return sendJson(res, 200, qrPairing.view(session));
   }
 
   if (pathname === '/api/adb/disconnect' && method === 'POST') {
     const { address } = await readJson(req);
-    if (!SERIAL_RE.test(String(address ?? ''))) return sendJson(res, 400, { error: 'Địa chỉ không hợp lệ' });
+    if (!SERIAL_RE.test(String(address ?? ''))) return sendJson(res, 400, { error: t(lang, 'badAddressShort') });
     const message = await adb.disconnectDevice(String(address));
     return sendJson(res, 200, { ok: true, message });
   }
@@ -306,7 +310,7 @@ async function handleApi(req, res, url) {
   let m = /^\/api\/devices\/([^/]+)\/(tcpip|upload)$/.exec(pathname);
   if (m && method === 'POST') {
     const serial = decodeURIComponent(m[1]);
-    checkSerial(serial);
+    checkSerial(serial, lang);
 
     if (m[2] === 'tcpip') {
       // Find the Wi-Fi IP first: the connection may drop when adbd restarts.
@@ -321,12 +325,12 @@ async function handleApi(req, res, url) {
     // upload: raw body, ?name=<file name>
     const name = safeFileName(url.searchParams.get('name'));
     const length = Number(req.headers['content-length'] || 0);
-    if (length > config.maxUploadBytes) return sendJson(res, 413, { error: 'File quá lớn' });
+    if (length > config.maxUploadBytes) return sendJson(res, 413, { error: t(lang, 'fileTooLarge') });
     let received = 0;
     async function* body() {
       for await (const chunk of req) {
         received += chunk.length;
-        if (received > config.maxUploadBytes) throw Object.assign(new Error('File quá lớn'), { status: 413 });
+        if (received > config.maxUploadBytes) throw Object.assign(new Error(t(lang, 'fileTooLarge')), { status: 413 });
         yield chunk;
       }
     }
@@ -335,7 +339,7 @@ async function handleApi(req, res, url) {
       await adb.push(serial, body(), remote, 0o644);
       const output = await adb.shell(serial, `pm install -r ${shellQuote(remote)}; rm -f ${shellQuote(remote)}`, { timeoutMs: 5 * 60_000 });
       const ok = /Success/.test(output);
-      return sendJson(res, ok ? 200 : 500, ok ? { ok, installed: true, output: output.trim() } : { error: output.trim() || 'Cài đặt thất bại' });
+      return sendJson(res, ok ? 200 : 500, ok ? { ok, installed: true, output: output.trim() } : { error: output.trim() || t(lang, 'installFailed') });
     }
     const remote = `/sdcard/Download/${name}`;
     await adb.push(serial, body(), remote, 0o644);
@@ -357,7 +361,7 @@ const handler = async (req, res) => {
   }
   if (!auth.hostAllowed(req)) {
     res.writeHead(421, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('Host không được phép. Thêm vào ALLOWED_HOSTS hoặc đặt ACCESS_PASSWORD.');
+    res.end('Host không được phép / Host not allowed. Add it to ALLOWED_HOSTS or set ACCESS_PASSWORD.');
     return;
   }
   try {

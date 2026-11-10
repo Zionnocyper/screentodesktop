@@ -9,7 +9,8 @@ Hiển thị và điều khiển điện thoại Android ngay trên trình duy�
 - Âm thanh (Android 11+), đồng bộ clipboard hai chiều, chụp màn hình
 - Kéo-thả file: APK được cài đặt, file khác vào thư mục `Download`
 - Nút Back / Home / Đa nhiệm / âm lượng / nguồn / xoay / thông báo / tắt màn hình điện thoại
-- Không dây qua Wi-Fi: ghép đôi *Gỡ lỗi không dây* bằng mã 6 số ngay trên web, tự tìm điện thoại trong mạng (mDNS)
+- Không dây qua Wi-Fi: ghép đôi *Gỡ lỗi không dây* bằng **mã QR** hoặc mã 6 số ngay trên web, tự tìm điện thoại trong mạng (mDNS)
+- Giao diện kính (glassy), **tiếng Việt / English**, **sáng / tối (night mode)** hoặc tự động theo hệ thống
 - Có mật khẩu đăng nhập khi deploy lên server
 
 Phần chạy trên điện thoại là [scrcpy-server](https://github.com/Genymobile/scrcpy) v5.0.1 (được đẩy lên tự động, không cần cài app nào trên điện thoại).
@@ -151,10 +152,12 @@ Bluetooth không dùng được (ADB không hỗ trợ, băng thông quá thấp
 
 **1. Ghép đôi Gỡ lỗi không dây — không cần cáp (Android 11+, khuyên dùng)**
 
-1. Điện thoại và máy chạy server cùng mạng Wi-Fi.
-2. Điện thoại: *Tùy chọn nhà phát triển* → **Gỡ lỗi không dây** → bật → **Ghép nối thiết bị bằng mã ghép nối**.
-3. Trên web bấm **Ghép đôi Wi-Fi** (hoặc nút *Ghép đôi* trên thẻ điện thoại ở mục *Tìm thấy trong mạng* — địa chỉ được điền sẵn), nhập **mã 6 số** đang hiện trên điện thoại.
-4. Server ghép đôi rồi tự kết nối; điện thoại hiện trong danh sách, bấm **Xem**.
+Điện thoại và máy chạy server cùng mạng Wi-Fi, trên điện thoại vào *Tùy chọn nhà phát triển* → **Gỡ lỗi không dây** → bật. Sau đó chọn một trong hai:
+
+- **Mã QR (nhanh nhất):** trên web bấm **Ghép đôi Wi-Fi** → tab **Quét mã QR**. Trên điện thoại chọn **Ghép nối thiết bị bằng mã QR** và quét mã trên màn hình — server tự ghép đôi và kết nối, không phải gõ gì (mã hết hạn sau 5 phút, bấm *Tạo mã mới* nếu cần).
+- **Mã 6 số:** trên điện thoại chọn **Ghép nối thiết bị bằng mã ghép nối**; trên web bấm *Ghép đôi* ở thẻ điện thoại trong mục *Tìm thấy trong mạng* (địa chỉ điền sẵn) hoặc tab **Mã 6 số**, nhập mã.
+
+Điện thoại hiện trong danh sách, bấm **Xem**.
 
 Chỉ cần ghép đôi **một lần**. Những lần sau chỉ việc bật *Gỡ lỗi không dây*: adb server tự tìm (mDNS) và tự kết nối, dù cổng có đổi. Nếu chưa tự kết nối, thẻ điện thoại hiện ở mục *Tìm thấy trong mạng* với nút **Kết nối**.
 

@@ -1,5 +1,6 @@
 // Devices attached to the ScreenToDesktop server (adb on the server machine).
 import { ByteQueue } from '../scrcpy/byte-queue.js';
+import { getLang, t } from '../i18n.js';
 
 const CHANNEL_VIDEO = 0;
 const CHANNEL_AUDIO = 1;
@@ -9,7 +10,7 @@ export async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(path, {
     method,
     credentials: 'same-origin',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
+    headers: { 'X-Lang': getLang(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data = null;
@@ -41,7 +42,7 @@ export function watchServerDevices(onUpdate, onAuthError) {
   let stopped = false;
   let retry = null;
   const connect = () => {
-    es = new EventSource('/api/devices/events', { withCredentials: true });
+    es = new EventSource(`/api/devices/events?lang=${getLang()}`, { withCredentials: true });
     es.onmessage = (ev) => {
       try {
         onUpdate(JSON.parse(ev.data));
@@ -106,8 +107,8 @@ export class ServerDevice {
       };
 
       ws.onopen = () => {
-        onStatus('Đang yêu cầu server khởi động phiên…');
-        ws.send(JSON.stringify({ type: 'start', serial: this.serial, options }));
+        onStatus(t('tr.askServer'));
+        ws.send(JSON.stringify({ type: 'start', serial: this.serial, options, lang: getLang() }));
       };
       ws.onmessage = (ev) => {
         if (typeof ev.data === 'string') {
@@ -135,7 +136,7 @@ export class ServerDevice {
         const err = conn.error ? new Error(conn.error) : null;
         for (const q of Object.values(queues)) q?.end(err);
         if (!ready) {
-          const reason = conn.error || (ev.code === 1006 ? 'Mất kết nối tới server' : `WebSocket đóng (${ev.code})`);
+          const reason = conn.error || (ev.code === 1006 ? t('tr.lostServer') : t('tr.wsClosed', { code: ev.code }));
           reject(new Error(reason));
         }
       };
@@ -148,6 +149,7 @@ export class ServerDevice {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `/api/devices/${encodeURIComponent(this.serial)}/upload?name=${encodeURIComponent(file.name)}`);
       xhr.withCredentials = true;
+      xhr.setRequestHeader('X-Lang', getLang());
       xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
       xhr.onload = () => {
         let data = null;
@@ -157,7 +159,7 @@ export class ServerDevice {
         if (xhr.status >= 200 && xhr.status < 300) resolve(data);
         else reject(new Error(data?.error || `HTTP ${xhr.status}`));
       };
-      xhr.onerror = () => reject(new Error('Tải lên thất bại'));
+      xhr.onerror = () => reject(new Error(t('tr.uploadFailed')));
       xhr.send(file);
     });
   }

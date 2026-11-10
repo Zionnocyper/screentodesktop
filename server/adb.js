@@ -4,7 +4,14 @@ import net from 'node:net';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
 
-export class AdbError extends Error {}
+export class AdbError extends Error {
+  /** code/params let the HTTP layer translate our own errors (see i18n.js). */
+  constructor(message, code = null, params = {}) {
+    super(message);
+    this.code = code;
+    this.params = params;
+  }
+}
 
 /** Buffered async reader on top of a net.Socket. */
 export class SocketReader {
@@ -193,7 +200,7 @@ export class AdbClient {
       child.once('error', (err) => {
         reject(
           err.code === 'ENOENT'
-            ? new AdbError(`Không tìm thấy adb ("${this.adbPath}"). Cài Android platform-tools hoặc đặt biến ADB_PATH.`)
+            ? new AdbError(`adb not found ("${this.adbPath}")`, 'ADB_NOT_FOUND', { path: this.adbPath })
             : err,
         );
       });
@@ -263,7 +270,7 @@ export class AdbClient {
    */
   async pair(address, code, { timeoutMs = 45_000 } = {}) {
     const { socket, reader } = await this.openHostService(`host:pair:${code}:${address}`);
-    const timer = setTimeout(() => socket.destroy(new AdbError('Hết thời gian chờ ghép đôi')), timeoutMs);
+    const timer = setTimeout(() => socket.destroy(new AdbError('Pairing timed out', 'PAIR_TIMEOUT')), timeoutMs);
     try {
       const head = (await reader.read(4)).toString('ascii');
       if (head === 'FAIL') throw new AdbError(await readHexString(reader));

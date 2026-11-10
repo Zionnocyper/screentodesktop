@@ -2,6 +2,7 @@
 // a few system properties, plus phones discovered on the LAN through the adb
 // server's mDNS (Wireless debugging), and notifies listeners on change.
 import { EventEmitter } from 'node:events';
+import { explainAdbError } from './i18n.js';
 
 const PROPS = [
   ['manufacturer', 'ro.product.manufacturer'],
@@ -29,6 +30,7 @@ export class DeviceManager extends EventEmitter {
   #services = [];
   #servicesKey = '';
   error = null;
+  errorObj = null;
   mdns = null; // null = unknown, true/false once checked
 
   constructor(adb) {
@@ -40,6 +42,7 @@ export class DeviceManager extends EventEmitter {
     this.#stop = this.#adb.trackDevices(
       (list) => {
         this.error = null;
+        this.errorObj = null;
         this.#raw = list;
         this.#emit();
         for (const d of list) if (d.state === 'device') this.#enrich(d);
@@ -48,6 +51,7 @@ export class DeviceManager extends EventEmitter {
         const msg = err?.message ?? String(err);
         if (this.error !== msg) console.warn(`[adb] ${msg}`);
         this.error = msg;
+        this.errorObj = err;
         this.#emit();
       },
     );
@@ -109,12 +113,13 @@ export class DeviceManager extends EventEmitter {
   }
 
   #emit() {
-    this.emit('change', this.snapshot());
+    this.emit('change');
   }
 
-  /** Payload for the API / SSE. */
-  snapshot() {
-    return { devices: this.list(), discovered: this.discovered(), mdns: this.mdns, error: this.error };
+  /** Payload for the API / SSE, with the adb error in the viewer's language. */
+  snapshot(lang = 'vi') {
+    const error = this.errorObj ? explainAdbError(lang, this.errorObj) : this.error;
+    return { devices: this.list(), discovered: this.discovered(), mdns: this.mdns, error };
   }
 
   list() {

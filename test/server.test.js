@@ -25,6 +25,9 @@ const fake = {
   wifiConnected: false,
   pairAttempts: [],
   trackers: new Set(),
+  // QR pairing: set when the "phone" has scanned the code
+  qrName: null,
+  qrPassword: null,
 };
 const WIFI_SERIAL = () => `${fake.wifiGuid}._adb-tls-connect._tcp`;
 
@@ -37,6 +40,7 @@ function deviceListText() {
 function mdnsServicesText() {
   let text = `${fake.wifiGuid}\t_adb-tls-pairing._tcp\t192.168.1.50:37000\n`;
   text += `${fake.wifiGuid}\t_adb-tls-connect._tcp\t192.168.1.50:41000\n`;
+  if (fake.qrName) text += `${fake.qrName}\t_adb-tls-pairing._tcp\t192.168.1.50:37001\n`;
   return text;
 }
 
@@ -192,7 +196,7 @@ function startFakeAdb() {
           fake.pairAttempts.push({ code, address: addr.join(':') });
           socket.write('OKAY');
           setTimeout(() => {
-            if (code === '123456') {
+            if (code === '123456' || (fake.qrPassword && code === fake.qrPassword)) {
               socket.end(okayString(`Successfully paired to ${addr.join(':')} [guid=${fake.wifiGuid}]`).subarray(4));
             } else socket.end(fail('Failed: Wrong password or connection was dropped.'));
           }, 50);
@@ -423,4 +427,44 @@ test('pairing with the right code connects the phone over Wi-Fi', async () => {
   const wifi = data.devices.find((x) => x.serial === WIFI_SERIAL());
   assert.equal(wifi.wireless, true);
   assert.equal(wifi.address, '192.168.1.50:41000');
+});
+
+test('English messages with X-Lang: en', async () => {
+  const r = await fetch(`${base()}/api/adb/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base(), 'X-Lang': 'en' },
+    body: JSON.stringify({ address: '192.168.1.50:37000', code: '000000' }),
+  });
+  assert.equal(r.status, 502);
+  assert.match((await r.json()).error, /Wrong pairing code/);
+  const bad = await fetch(`${base()}/api/adb/pair`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Origin: base(), 'X-Lang': 'en' },
+    body: JSON.stringify({ address: 'nope', code: '1' }),
+  });
+  assert.match((await bad.json()).error, /IP:port/);
+});
+
+test('QR pairing: code -> phone scans -> paired and connected', async () => {
+  const headers = { 'Content-Type': 'application/json', Origin: base() };
+  const created = await (await fetch(`${base()}/api/adb/qr`, { method: 'POST', headers, body: '{}' })).json();
+  assert.equal(created.state, 'waiting');
+  assert.match(created.qr, /^WIFI:T:ADB;S:studio-[A-Za-z0-9]+;P:[A-Za-z0-9]+;;$/);
+  assert.equal(created.password, undefined, 'password is only inside the QR text');
+  const [, name, password] = /S:([^;]+);P:([^;]+);/.exec(created.qr);
+
+  // the phone scans the code and advertises the pairing service under that name
+  fake.qrName = name;
+  fake.qrPassword = password;
+
+  const done = await waitFor(async () => {
+    const st = await (await fetch(`${base()}/api/adb/qr/${created.id}`)).json();
+    return ['connected', 'paired', 'error', 'expired'].includes(st.state) ? st : null;
+  }, 10000);
+  assert.equal(done.state, 'connected', JSON.stringify(done));
+  assert.deepEqual(fake.pairAttempts.at(-1), { code: password, address: '192.168.1.50:37001' });
+
+  assert.equal((await fetch(`${base()}/api/adb/qr/${created.id}`, { method: 'DELETE', headers })).status, 200);
+  assert.equal((await fetch(`${base()}/api/adb/qr/${created.id}`)).status, 404);
+  fake.qrName = null;
 });

@@ -6,6 +6,7 @@
 //                    binary  [channel:u8][raw bytes]  channel 0=video 1=audio 2=control
 import { WebSocket } from 'ws';
 import { startScrcpy } from './scrcpy.js';
+import { normalizeLang, t } from './i18n.js';
 
 const CHANNEL = { video: 0, audio: 1, control: 2 };
 const HIGH_WATER = 4 * 1024 * 1024;
@@ -15,6 +16,7 @@ export function handleStreamSocket(ws, { adb, devices, jarPath, clientIp }) {
   let session = null;
   let started = false;
   let closed = false;
+  let lang = 'vi';
   const paused = new Set();
   let drainTimer = null;
 
@@ -63,7 +65,7 @@ export function handleStreamSocket(ws, { adb, devices, jarPath, clientIp }) {
     if (!paused.has(socket)) socket.resume(); // paused by SocketReader.detach()
     socket.on('error', () => {});
     socket.on('close', () => {
-      if (!closed) fail(`Thiết bị đã đóng kết nối ${name}`);
+      if (!closed) fail(t(lang, 'socketClosed', { name }));
     });
   };
 
@@ -85,11 +87,12 @@ export function handleStreamSocket(ws, { adb, devices, jarPath, clientIp }) {
     }
     if (msg.type !== 'start' || started) return;
     started = true;
+    lang = normalizeLang(msg.lang);
 
     const serial = String(msg.serial ?? '');
     const device = devices.get(serial);
-    if (!device) return fail('Không tìm thấy thiết bị');
-    if (device.state !== 'device') return fail(`Thiết bị đang ở trạng thái "${device.state}"`);
+    if (!device) return fail(t(lang, 'deviceNotFound'));
+    if (device.state !== 'device') return fail(t(lang, 'deviceState', { state: device.state }));
 
     console.log(`[stream] ${clientIp} -> ${serial}`);
     try {
@@ -98,6 +101,7 @@ export function handleStreamSocket(ws, { adb, devices, jarPath, clientIp }) {
         serial,
         jarPath,
         options: msg.options,
+        lang,
         onStatus: (text) => sendJson({ type: 'status', text }),
         onLog: (line) => sendJson({ type: 'log', line }),
       });
@@ -110,7 +114,7 @@ export function handleStreamSocket(ws, { adb, devices, jarPath, clientIp }) {
       return;
     }
     session.exited.then((logs) => {
-      if (!closed) fail(logs.split('\n').filter((l) => /ERROR|Exception/.test(l)).slice(-3).join('\n') || 'scrcpy-server đã dừng');
+      if (!closed) fail(logs.split('\n').filter((l) => /ERROR|Exception/.test(l)).slice(-3).join('\n') || t(lang, 'serverStopped'));
     });
     sendJson({ type: 'ready', audio: Boolean(session.audio), control: Boolean(session.control), options: session.options });
     forward('video', session.video);

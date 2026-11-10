@@ -7,19 +7,22 @@ import { setupSettings } from './settings.js';
 import { closeViewer, currentSession, openViewer, restoreViewer } from './viewer.js';
 import { fillIcons, h, iconButton, setupTooltips, toast } from './ui.js';
 import { icon } from './icons.js';
+import { applyI18n, getLang, setLang, t } from './i18n.js';
+import { getThemePref, isDark, setThemePref } from './theme.js';
 
 const $ = (id) => document.getElementById(id);
 const shell = $('shell');
 fillIcons();
+applyI18n();
 $('scrcpy-version').textContent = SCRCPY_VERSION;
 setupTooltips({ shell });
 
 // ------------------------------------------------------------ settings + quick toggles
 function syncQuickSettings(o) {
-  $('sb-quality').textContent = o.maxSize ? String(o.maxSize) : 'Gốc';
-  $('btn-settings').dataset.tip = `Chất lượng · ${o.maxSize || 'gốc'} · ${o.videoBitRate / 1e6} Mbps · ${o.maxFps} fps`;
+  $('sb-quality').textContent = o.maxSize ? String(o.maxSize) : t('sb.native');
+  $('btn-settings').dataset.tip = t('sb.qualityTip', { size: o.maxSize || t('sb.nativeLower'), mbps: o.videoBitRate / 1e6, fps: o.maxFps });
   $('sb-audio').checked = o.audio;
-  document.querySelector('.sb-toggle').dataset.tip = `Âm thanh: ${o.audio ? 'bật' : 'tắt'}`;
+  $('sb-audio-row').dataset.tip = o.audio ? t('sb.audioOn') : t('sb.audioOff');
 }
 
 const settings = setupSettings({
@@ -29,7 +32,7 @@ const settings = setupSettings({
   resetButton: $('settings-reset'),
   onChange: (o) => {
     syncQuickSettings(o);
-    toast('Đã lưu. Áp dụng cho lần xem tiếp theo.', { timeout: 2000 });
+    toast(t('v.savedSettings'), { timeout: 2000 });
   },
 });
 syncQuickSettings(settings.options);
@@ -53,6 +56,47 @@ function view(device) {
   openViewer(device, streamOptions());
 }
 
+// ------------------------------------------------------------ night mode + language
+function syncTheme() {
+  const dark = isDark();
+  $('sb-night').checked = dark;
+  $('sb-night-row').dataset.tip = dark ? t('sb.nightOn') : t('sb.nightOff');
+  $('ui-theme').value = getThemePref();
+}
+$('sb-night').addEventListener('change', (e) => setThemePref(e.target.checked ? 'dark' : 'light'));
+$('ui-theme').addEventListener('change', (e) => setThemePref(e.target.value));
+window.addEventListener('themechange', syncTheme);
+syncTheme();
+
+function syncLang() {
+  const lang = getLang();
+  for (const b of document.querySelectorAll('.seg [data-lang]')) b.setAttribute('aria-checked', String(b.dataset.lang === lang));
+  $('ui-lang').value = lang;
+  $('sb-lang-row').dataset.tip = t('sb.languageTip');
+}
+for (const b of document.querySelectorAll('.seg [data-lang]')) b.addEventListener('click', () => setLang(b.dataset.lang));
+$('sb-lang-icon').addEventListener('click', () => setLang(getLang() === 'vi' ? 'en' : 'vi'));
+$('ui-lang').addEventListener('change', (e) => setLang(e.target.value));
+syncLang();
+
+// Re-render everything that is built in JS when the language changes.
+window.addEventListener('langchange', () => {
+  syncLang();
+  syncTheme();
+  syncQuickSettings(settings.options);
+  setCollapsed(shell.classList.contains('collapsed'));
+  setGuideCollapsed($('wifi-guide').classList.contains('collapsed'));
+  renderStatus();
+  renderServer(serverData);
+  renderUsb?.();
+  renderWifiGuide();
+  renderQrState();
+  setPairBusy($('pair-submit').disabled);
+  if (stopWatching && serverAuthed) startServerWatch(); // server-side messages follow the language too
+  $('warnings').replaceChildren();
+  checkSupport();
+});
+
 // ------------------------------------------------------------ warnings
 function warn(text) {
   const box = h('div', { class: 'warning glass-inset' });
@@ -60,24 +104,30 @@ function warn(text) {
   box.append(h('div', {}, text));
   $('warnings').append(box);
 }
-if (!H264Decoder.supported) {
-  warn('Trình duyệt này không có WebCodecs nên không giải mã được video. Hãy dùng Chrome, Edge, Firefox 130+ hoặc Safari 17+.');
+function checkSupport() {
+  if (!H264Decoder.supported) warn(t('warn.webcodecs'));
 }
+checkSupport();
 
 // ------------------------------------------------------------ device presentation
 const STATE = {
-  device: ['Sẵn sàng', 'ok'],
-  unauthorized: ['Chưa cho phép', 'warn'],
-  authorizing: ['Đang xác thực', 'warn'],
-  offline: ['Ngoại tuyến', 'off'],
-  connecting: ['Đang kết nối', 'warn'],
-  'no permissions': ['Thiếu quyền USB', 'warn'],
+  device: ['dev.ready', 'ok'],
+  unauthorized: ['dev.unauthorized', 'warn'],
+  authorizing: ['dev.authorizing', 'warn'],
+  offline: ['dev.offline', 'off'],
+  connecting: ['dev.connecting', 'warn'],
+  'no permissions': ['dev.noPermissions', 'warn'],
 };
+
+function stateOf(device) {
+  const [key, cls] = STATE[device.state] ?? [null, 'off'];
+  return [key ? t(key) : device.state, cls];
+}
 
 function look(device) {
   if (device.kind === 'usb') return { variant: 'blue', glyph: 'usb', where: 'WebUSB' };
   if (device.info?.wireless) return { variant: 'green', glyph: 'wifi', where: 'Wi-Fi' };
-  return { variant: 'indigo', glyph: 'phone', where: 'USB · server' };
+  return { variant: 'indigo', glyph: 'phone', where: t('dev.whereServer') };
 }
 
 function appIcon(variant, glyph, { size = '', state = null, live = false } = {}) {
@@ -92,7 +142,7 @@ function searchText(device) {
 }
 
 function card(device, { meta, hint, actions }) {
-  const [label, cls] = STATE[device.state] ?? [device.state, 'off'];
+  const [label, cls] = stateOf(device);
   const { variant, glyph } = look(device);
   return h(
     'article',
@@ -109,8 +159,8 @@ function card(device, { meta, hint, actions }) {
   );
 }
 
-function viewButton(device) {
-  return iconButton('play', 'Xem', {
+function viewButton(device, label = t('dev.view')) {
+  return iconButton('play', label, {
     class: 'btn primary',
     disabled: device.state !== 'device' || undefined,
     onclick: () => view(device),
@@ -124,8 +174,8 @@ const wide = () => matchMedia('(min-width: 901px)').matches;
 function setCollapsed(collapsed) {
   shell.classList.toggle('collapsed', collapsed);
   const btn = $('sb-collapse');
-  btn.dataset.tip = collapsed ? 'Mở rộng' : 'Thu gọn';
-  btn.setAttribute('aria-label', collapsed ? 'Mở rộng thanh bên' : 'Thu gọn thanh bên');
+  btn.dataset.tip = collapsed ? t('sb.expand') : t('sb.collapse');
+  btn.setAttribute('aria-label', collapsed ? t('sb.expandAria') : t('sb.collapseAria'));
   try {
     localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
   } catch {}
@@ -197,13 +247,13 @@ function applyFilter() {
 
 function renderSidebar() {
   const group = $('sb-devices');
-  group.dataset.empty = 'Chưa có thiết bị';
+  group.dataset.empty = t('sb.noDevices');
   const active = currentSession()?.device ?? null;
   const all = [...usbPresent.values(), ...serverDevices.values()];
   group.replaceChildren(
     ...all.map((d) => {
       const { variant, glyph, where } = look(d);
-      const [label, cls] = STATE[d.state] ?? [d.state, 'off'];
+      const [label, cls] = stateOf(d);
       const isActive = d === active;
       const item = h('button', {
         type: 'button',
@@ -214,7 +264,7 @@ function renderSidebar() {
         appIcon(variant, glyph, { state: cls, live: isActive }),
         h('span', { class: 'sb-text' }, d.name, h('span', { class: 'sb-sub' }, d.state === 'device' ? where : `${where} · ${label}`)),
       );
-      if (isActive) item.append(h('span', { class: 'badge-count' }, 'Đang xem'));
+      if (isActive) item.append(h('span', { class: 'badge-count' }, t('sb.viewing')));
       item.addEventListener('click', () => {
         if (d.state !== 'device') {
           toast(`${d.name}: ${label}`, { type: 'error' });
@@ -242,7 +292,7 @@ $('sb-connect').addEventListener('click', () => {
 });
 $('sb-pair').addEventListener('click', () => {
   closeDrawer();
-  pairOrGuide();
+  pairOrGuide('qr');
 });
 $('sb-wifi-guide').addEventListener('click', () => {
   closeDrawer();
@@ -253,7 +303,14 @@ $('sb-usb').addEventListener('click', () => {
   addUsbDevice();
 });
 
-function setStatus(kind, title, sub = '') {
+// Status footer: a function so it can be re-rendered in another language.
+let statusFn = () => ({ kind: '', title: t('sb.checking'), sub: '' });
+function setStatus(fn) {
+  statusFn = fn;
+  renderStatus();
+}
+function renderStatus() {
+  const { kind, title, sub } = statusFn();
   $('sb-status-dot').className = `status-dot ${kind}`;
   $('sb-status-title').textContent = title;
   $('sb-status-sub').textContent = sub;
@@ -265,7 +322,7 @@ window.addEventListener('viewer:state', (e) => {
   const { state, name } = e.detail;
   $('sb-session').hidden = state !== 'minimized';
   $('sb-session-name').textContent = name;
-  if (state === 'minimized') $('sb-session-stats').textContent = 'Đang chạy nền';
+  if (state === 'minimized') $('sb-session-stats').textContent = t('sb.running');
   renderSidebar();
 });
 window.addEventListener('viewer:stats', (e) => {
@@ -285,14 +342,16 @@ const WG_COLLAPSED_KEY = 'screentodesktop.wifiGuide.collapsed';
 function setGuideCollapsed(collapsed) {
   $('wifi-guide').classList.toggle('collapsed', collapsed);
   $('wg-toggle').setAttribute('aria-expanded', String(!collapsed));
-  $('wg-toggle').querySelector('span:last-child').textContent = collapsed ? 'Mở hướng dẫn' : 'Thu gọn';
+  $('wg-toggle-label').textContent = collapsed ? t('wg.expand') : t('wg.collapse');
   try {
     localStorage.setItem(WG_COLLAPSED_KEY, collapsed ? '1' : '0');
   } catch {}
 }
 try {
-  if (localStorage.getItem(WG_COLLAPSED_KEY) === '1') setGuideCollapsed(true);
-} catch {}
+  setGuideCollapsed(localStorage.getItem(WG_COLLAPSED_KEY) === '1');
+} catch {
+  setGuideCollapsed(false);
+}
 $('wg-toggle').addEventListener('click', () => setGuideCollapsed(!$('wifi-guide').classList.contains('collapsed')));
 
 function showWifiGuide() {
@@ -306,23 +365,21 @@ $('hero-wifi').addEventListener('click', (e) => {
 });
 
 /** Opens the pairing dialog when a server is available, otherwise explains what is missing. */
-function pairOrGuide() {
-  if (serverMode && serverAuthed) return openPair();
+function pairOrGuide(tab = 'qr') {
+  if (serverMode && serverAuthed) return openPair({ tab });
   showWifiGuide();
-  toast(
-    serverMode ? 'Đăng nhập server trước (khu “Thiết bị trên server”).' : 'Wi-Fi cần chạy server trên máy tính — làm theo bước 1 và 2.',
-    { type: 'error', timeout: 5000 },
-  );
+  toast(serverMode ? t('wg.signInToast') : t('wg.needServerToast'), { type: 'error', timeout: 5000 });
 }
-$('wg-pair').addEventListener('click', pairOrGuide);
+$('wg-pair-qr').addEventListener('click', () => pairOrGuide('qr'));
+$('wg-pair').addEventListener('click', () => pairOrGuide('code'));
 
 for (const btn of document.querySelectorAll('[data-copy]')) {
   btn.addEventListener('click', async () => {
     try {
       await navigator.clipboard.writeText($(btn.dataset.copy).textContent);
-      toast('Đã sao chép lệnh', { type: 'ok', timeout: 1600 });
+      toast(t('wg.copied'), { type: 'ok', timeout: 1600 });
     } catch {
-      toast('Không sao chép được — hãy bôi đen và sao chép thủ công.', { type: 'error' });
+      toast(t('wg.copyFailed'), { type: 'error' });
     }
   });
 }
@@ -351,41 +408,33 @@ function renderWifiGuide() {
     view: wireless.length > 0,
   };
 
-  // 1 + 2: is there a Node server behind this page?
   if (serverMode === true) {
-    live('wg-live-install', 'Đã cài — server đang chạy');
-    live('wg-live-server', `Server đang chạy tại ${location.host}${serverAuthed ? '' : ' (cần đăng nhập)'}`);
+    live('wg-live-install', t('wg.live.installed'));
+    live('wg-live-server', t('wg.live.serverAt', { host: location.host }) + (serverAuthed ? '' : t('wg.live.needSignIn')));
   } else if (serverMode === false) {
     live('wg-live-install', '');
-    live('wg-live-server', 'Trang này là bản web tĩnh, chưa có server. Chạy server rồi mở http://localhost:8000.', 'warn');
+    live('wg-live-server', t('wg.live.static'), 'warn');
   } else {
     live('wg-live-install', '');
-    live('wg-live-server', 'Đang kiểm tra server…', 'wait');
+    live('wg-live-server', t('wg.live.checking'), 'wait');
   }
   $('wg-open-local').hidden = serverMode !== false;
 
-  // 3: does the server see the phone on the LAN?
-  if (wireless.length) live('wg-live-phone', `Đã kết nối: ${wireless.map((d) => d.name).join(', ')}`);
-  else if (waiting.length) live('wg-live-phone', `Đã thấy ${names(waiting)} đang chờ ghép đôi`);
-  else if (advertising.length) live('wg-live-phone', `Đã thấy ${names(advertising)} đang bật Gỡ lỗi không dây`);
-  else if (serverMode && serverAuthed && serverData.mdns === false) {
-    live('wg-live-phone', 'adb trên server không bật mDNS nên không tự tìm được điện thoại — nhập IP:cổng ở bước 4.', 'warn');
-  } else if (serverMode && serverAuthed) live('wg-live-phone', 'Đang tìm điện thoại trong mạng…', 'wait');
+  if (wireless.length) live('wg-live-phone', t('wg.live.connected', { names: wireless.map((d) => d.name).join(', ') }));
+  else if (waiting.length) live('wg-live-phone', t('wg.live.waiting', { names: names(waiting) }));
+  else if (advertising.length) live('wg-live-phone', t('wg.live.advertising', { names: names(advertising) }));
+  else if (serverMode && serverAuthed && serverData.mdns === false) live('wg-live-phone', t('wg.live.mdnsOff'), 'warn');
+  else if (serverMode && serverAuthed) live('wg-live-phone', t('wg.live.searching'), 'wait');
   else live('wg-live-phone', '');
 
-  // 4: pairing
-  if (wireless.length) live('wg-live-pair', 'Đã ghép đôi và kết nối');
-  else if (!serverMode) live('wg-live-pair', 'Cần chạy server (bước 2) để ghép đôi.', 'warn');
-  else if (!serverAuthed) live('wg-live-pair', 'Đăng nhập server trước.', 'warn');
-  else if (waiting.length) live('wg-live-pair', `Bấm “Ghép đôi” cho ${names(waiting)} rồi nhập mã 6 số.`, 'wait');
+  if (wireless.length) live('wg-live-pair', t('wg.live.paired'));
+  else if (!serverMode) live('wg-live-pair', t('wg.live.needServer'), 'warn');
+  else if (!serverAuthed) live('wg-live-pair', t('wg.live.signInFirst'), 'warn');
+  else if (waiting.length) live('wg-live-pair', t('wg.live.pairNow', { names: names(waiting) }), 'wait');
   else live('wg-live-pair', '');
 
-  // 5: view
-  $('wg-view-actions').replaceChildren(
-    ...wireless.map((d) => iconButton('play', `Xem ${d.name}`, { class: 'btn primary', onclick: () => view(d) })),
-  );
+  $('wg-view-actions').replaceChildren(...wireless.map((d) => viewButton(d, t('dev.viewName', { name: d.name }))));
 
-  // step markers: done = check, first unfinished = current
   const order = ['install', 'server', 'phone', 'pair', 'view'];
   const current = order.find((k) => !done[k]);
   order.forEach((k, i) => {
@@ -398,13 +447,13 @@ function renderWifiGuide() {
   const status = $('wg-status');
   if (wireless.length) {
     status.className = 'pill pill--state ok';
-    status.textContent = 'Đã kết nối Wi-Fi';
+    status.textContent = t('wg.status.connected');
   } else if (serverMode === false) {
     status.className = 'pill pill--state warn';
-    status.textContent = 'Cần chạy server';
+    status.textContent = t('wg.status.needServer');
   } else if (serverMode) {
     status.className = 'pill pill--state';
-    status.textContent = `Bước ${order.indexOf(current) + 1}/5`;
+    status.textContent = t('wg.status.step', { n: order.indexOf(current) + 1 });
   } else status.textContent = '';
 }
 
@@ -415,6 +464,9 @@ let serverData = { devices: [], discovered: [], mdns: null, error: null };
 
 function renderServer(data) {
   serverData = { devices: [], discovered: [], mdns: null, error: null, ...data };
+  // studio-* pairing services come from our own QR codes: the QR flow handles them
+  serverData.discovered = (serverData.discovered ?? []).filter((s) => !(s.type === 'pairing' && s.instance.startsWith('studio-')));
+  if (!serverMode) return;
   const { devices, error } = serverData;
   const grid = $('server-devices');
   const seen = new Set();
@@ -426,10 +478,10 @@ function renderServer(data) {
   }
   for (const serial of serverDevices.keys()) if (!seen.has(serial)) serverDevices.delete(serial);
 
-  serverAuthed = true;
+  if (!serverAuthed) return;
   $('sb-connect').hidden = false;
-  if (error) setStatus('warn', 'adb chưa sẵn sàng', error);
-  else setStatus('ok', 'Server đang chạy', `${location.host} · ${serverDevices.size} thiết bị`);
+  if (error) setStatus(() => ({ kind: 'warn', title: t('st.adbNotReady'), sub: serverData.error }));
+  else setStatus(() => ({ kind: 'ok', title: t('st.serverRunning'), sub: t('st.devicesCount', { host: location.host, n: serverDevices.size }) }));
 
   grid.replaceChildren();
   $('panel-server').querySelector('.empty')?.remove();
@@ -438,13 +490,11 @@ function renderServer(data) {
   renderSidebar();
   renderWifiGuide();
   if (error) {
-    grid.after(h('div', { class: 'empty' }, `Không kết nối được adb trên server: ${error}`));
+    grid.after(h('div', { class: 'empty' }, t('server.adbError', { error })));
     return;
   }
   if (!serverDevices.size) {
-    grid.after(
-      h('div', { class: 'empty' }, 'Chưa có thiết bị nào. Cắm cáp vào máy chủ (đã bật Gỡ lỗi USB), hoặc bấm “Ghép đôi Wi-Fi” để kết nối không dây.'),
-    );
+    grid.after(h('div', { class: 'empty' }, t('server.empty')));
     return;
   }
   for (const d of serverDevices.values()) {
@@ -452,15 +502,11 @@ function renderServer(data) {
     const where = i.wireless ? `Wi-Fi${i.address ? ` ${i.address}` : ''}` : 'USB';
     const meta = [i.androidVersion && `Android ${i.androidVersion}`, where, i.wireless && i.address ? null : d.serial].filter(Boolean).join(' · ');
     const hint =
-      d.state === 'unauthorized'
-        ? 'Mở khóa điện thoại và bấm “Cho phép” trong hộp thoại gỡ lỗi USB.'
-        : d.state === 'no permissions'
-          ? 'Server thiếu quyền truy cập USB (udev rules trên Linux).'
-          : null;
+      d.state === 'unauthorized' ? t('dev.hintUnauthorized') : d.state === 'no permissions' ? t('dev.hintNoPermissions') : null;
     const actions = [viewButton(d)];
     if (i.wireless) {
       actions.push(
-        iconButton('unlink', 'Ngắt', {
+        iconButton('unlink', t('dev.disconnect'), {
           onclick: async () => {
             try {
               await api('/api/adb/disconnect', { method: 'POST', body: { address: d.serial } });
@@ -471,7 +517,7 @@ function renderServer(data) {
         }),
       );
     } else if (d.state === 'device') {
-      actions.push(iconButton('wifi', 'Wi-Fi', { title: 'Bật ADB qua Wi-Fi để rút cáp', onclick: () => enableWifi(d) }));
+      actions.push(iconButton('wifi', 'Wi-Fi', { title: t('dev.wifiBtnTip'), onclick: () => enableWifi(d) }));
     }
     grid.append(card(d, { meta, hint, actions }));
   }
@@ -479,24 +525,24 @@ function renderServer(data) {
 }
 
 async function enableWifi(device) {
-  const t = toast('Đang bật ADB qua Wi-Fi…', { timeout: 0 });
+  const tt = toast(t('wifi.enabling'), { timeout: 0 });
   try {
     const { ip, port } = await device.enableWifi();
     if (!ip) {
-      t.done('Đã bật chế độ TCP/IP nhưng không tìm thấy IP Wi-Fi của điện thoại.', 'error');
+      tt.done(t('wifi.noIp'), 'error');
       return;
     }
     await new Promise((r) => setTimeout(r, 1500));
     const { message } = await api('/api/adb/connect', { method: 'POST', body: { address: `${ip}:${port}` } });
-    t.done(`${message}\nGiờ có thể rút cáp USB.`);
+    tt.done(t('wifi.unplug', { message }));
   } catch (err) {
-    t.done(err.message, 'error');
+    tt.done(err.message, 'error');
   }
 }
 
-// ------------------------------------------------------------ Wi-Fi: discovery + pairing
+// ------------------------------------------------------------ Wi-Fi: discovery
 function discoveredName(s) {
-  return s.name || (s.serialHint ? `Điện thoại ${s.serialHint}` : s.instance);
+  return s.name || (s.serialHint ? t('server.phone', { serial: s.serialHint }) : s.instance);
 }
 
 /** Phones advertising Wireless debugging (or a pairing code) that are not connected yet. */
@@ -504,15 +550,15 @@ function renderDiscovered() {
   const all = serverData.discovered ?? [];
   // A phone showing its pairing dialog also advertises its connect service: show it once.
   const waiting = new Set(all.filter((s) => s.type === 'pairing').map((s) => s.instance));
-  const items = all.filter((s) => !s.connected && !(s.type === 'connect' && waiting.has(s.instance)));
+  const items = all.filter((s) => !s.connected && !(s.type === 'connect' && waiting.has(s.instance)) && !s.instance.startsWith('studio-'));
   const grid = $('discovered-list');
   grid.replaceChildren();
   $('server-discovered').hidden = !items.length;
   for (const s of items) {
     const pairing = s.type === 'pairing';
     const action = pairing
-      ? iconButton('link', 'Ghép đôi', { class: 'btn primary', onclick: () => openPair(s.address) })
-      : iconButton('wifi', 'Kết nối', { class: 'btn primary', onclick: () => connectAddress(s.target, discoveredName(s)) });
+      ? iconButton('link', t('server.pair'), { class: 'btn primary', onclick: () => openPair({ tab: 'code', address: s.address }) })
+      : iconButton('wifi', t('server.connect'), { class: 'btn primary', onclick: () => connectAddress(s.target, discoveredName(s)) });
     grid.append(
       h(
         'article',
@@ -525,11 +571,11 @@ function renderDiscovered() {
             'div',
             { class: 'device-text' },
             h('div', { class: 'device-name', title: s.instance }, discoveredName(s)),
-            h('div', { class: 'device-meta' }, `${pairing ? 'Đang chờ ghép đôi' : 'Gỡ lỗi không dây'} · ${s.address}`),
+            h('div', { class: 'device-meta' }, `${pairing ? t('server.waitingPair') : t('server.wirelessDebugging')} · ${s.address}`),
           ),
-          h('span', { class: `badge ${pairing ? 'warn' : 'off'}` }, pairing ? 'Chờ ghép đôi' : 'Chưa kết nối'),
+          h('span', { class: `badge ${pairing ? 'warn' : 'off'}` }, pairing ? t('server.badgeWaiting') : t('server.badgeNotConnected')),
         ),
-        !pairing && h('div', { class: 'device-note' }, 'Kết nối không được? Ghép đôi trước bằng mã 6 số.'),
+        !pairing && h('div', { class: 'device-note' }, t('server.connectNote')),
         h('div', { class: 'device-actions' }, action),
       ),
     );
@@ -537,22 +583,39 @@ function renderDiscovered() {
 }
 
 async function connectAddress(address, label = address) {
-  const t = toast(`Đang kết nối ${label}…`, { timeout: 0 });
+  const tt = toast(t('server.connecting', { label }), { timeout: 0 });
   try {
     const { message } = await api('/api/adb/connect', { method: 'POST', body: { address } });
-    t.done(message);
+    tt.done(message);
     return true;
   } catch (err) {
-    t.done(err.message, 'error');
+    tt.done(err.message, 'error');
     return false;
   }
 }
 
+// ------------------------------------------------------------ pairing dialog (QR + 6-digit code)
 const pairDialog = $('pair-dialog');
+let pairTab = 'qr';
+
+function setPairTab(tab) {
+  pairTab = tab;
+  for (const b of document.querySelectorAll('#pair-dialog .tab')) b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+  $('pair-panel-qr').hidden = tab !== 'qr';
+  $('pair-panel-code').hidden = tab !== 'code';
+  $('pair-submit').hidden = tab !== 'code';
+  if (tab === 'qr') startQr();
+  else {
+    stopQr();
+    renderPairDetected();
+    ($('pair-address').value ? $('pair-code') : $('pair-address')).focus();
+  }
+}
+for (const b of document.querySelectorAll('#pair-dialog .tab')) b.addEventListener('click', () => setPairTab(b.dataset.tab));
 
 function renderPairDetected() {
   if (!pairDialog.open) return;
-  const pairing = (serverData.discovered ?? []).filter((s) => s.type === 'pairing');
+  const pairing = (serverData.discovered ?? []).filter((s) => s.type === 'pairing' && !s.instance.startsWith('studio-'));
   $('pair-mdns-off').hidden = serverData.mdns !== false;
   $('pair-detected').hidden = !pairing.length;
   $('pair-chips').replaceChildren(
@@ -571,31 +634,32 @@ function renderPairDetected() {
   if (pairing.length === 1 && !$('pair-address').value) $('pair-address').value = pairing[0].address;
 }
 
-function openPair(address = '') {
+function openPair({ tab = 'qr', address = '' } = {}) {
   $('pair-address').value = address;
   $('pair-code').value = '';
   $('pair-error').hidden = true;
   setPairBusy(false);
   pairDialog.showModal();
-  renderPairDetected();
-  ($('pair-address').value ? $('pair-code') : $('pair-address')).focus();
+  // QR pairing needs the server to discover the phone through mDNS.
+  setPairTab(serverData.mdns === false ? 'code' : tab);
 }
 
 function setPairBusy(busy) {
-  const btn = $('pair-submit');
-  btn.disabled = busy;
-  btn.querySelector('span:last-child').textContent = busy ? 'Đang ghép đôi…' : 'Ghép đôi';
+  $('pair-submit').disabled = busy;
+  $('pair-submit-label').textContent = busy ? t('pd.busy') : t('pd.submit');
 }
 
-$('btn-pair').addEventListener('click', () => openPair());
+$('btn-pair').addEventListener('click', () => openPair({ tab: 'qr' }));
 $('pair-x').addEventListener('click', () => pairDialog.close());
 $('pair-cancel').addEventListener('click', () => pairDialog.close());
+pairDialog.addEventListener('close', stopQr);
 $('pair-code').addEventListener('input', (e) => {
   e.target.value = e.target.value.replace(/\D/g, '').slice(0, 6);
 });
 
 $('pair-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (pairTab !== 'code') return;
   const address = $('pair-address').value.trim();
   const code = $('pair-code').value.trim();
   const error = $('pair-error');
@@ -605,14 +669,14 @@ $('pair-form').addEventListener('submit', async (e) => {
     error.hidden = false;
     field?.focus();
   };
-  if (!/^(\[[^\]]+\]|[\w.-]+):\d{1,5}$/.test(address)) return fail('Nhập địa chỉ dạng IP:cổng, ví dụ 192.168.1.23:37159.', $('pair-address'));
-  if (!/^\d{6}$/.test(code)) return fail('Mã ghép đôi gồm 6 chữ số.', $('pair-code'));
+  if (!/^(\[[^\]]+\]|[\w.-]+):\d{1,5}$/.test(address)) return fail(t('pd.badAddress'), $('pair-address'));
+  if (!/^\d{6}$/.test(code)) return fail(t('pd.badCode'), $('pair-code'));
   setPairBusy(true);
   try {
     const result = await api('/api/adb/pair', { method: 'POST', body: { address, code } });
     pairDialog.close();
-    if (result.connected) toast('Đã ghép đôi và kết nối qua Wi-Fi. Bấm “Xem” để mở màn hình.', { type: 'ok', timeout: 6000 });
-    else toast(result.hint || 'Đã ghép đôi.', { type: 'ok', timeout: 10000 });
+    if (result.connected) toast(t('pd.done'), { type: 'ok', timeout: 6000 });
+    else toast(result.hint || t('pd.paired'), { type: 'ok', timeout: 10000 });
   } catch (err) {
     fail(err.message);
   } finally {
@@ -620,6 +684,121 @@ $('pair-form').addEventListener('submit', async (e) => {
   }
 });
 
+// --- QR code pairing
+let qr = null; // { id, state, message, hint, expiresIn, poll, tick, mdnsOff }
+
+async function qrSvg(text) {
+  const { default: qrcode } = await import('qrcode-generator'); // loaded only when needed
+  const code = qrcode(0, 'M');
+  code.addData(text);
+  code.make();
+  const n = code.getModuleCount();
+  const m = 2; // quiet zone (the white box adds more)
+  let d = '';
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (code.isDark(r, c)) d += `M${c + m} ${r + m}h1v1h-1z`;
+  const size = n + m * 2;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path d="${d}" fill="#111"/></svg>`;
+}
+
+function formatSeconds(s) {
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function renderQrState() {
+  const status = $('qr-status');
+  const box = $('qr-box');
+  if (!qr) {
+    status.className = 'qr-status';
+    status.textContent = '';
+    return;
+  }
+  const finished = ['connected', 'paired', 'error', 'expired'].includes(qr.state);
+  box.classList.toggle('dim', ['error', 'expired', 'creating'].includes(qr.state) || qr.mdnsOff);
+  box.classList.toggle('done', qr.state === 'connected' || qr.state === 'paired');
+  $('qr-new').hidden = !['error', 'expired'].includes(qr.state) && !qr.mdnsOff;
+  $('qr-expires').textContent = !finished && qr.expiresIn > 0 ? t('qr.expiresIn', { t: formatSeconds(qr.expiresIn) }) : '';
+  const set = (cls, text) => {
+    status.className = `qr-status ${cls}`;
+    status.textContent = text;
+  };
+  if (qr.mdnsOff) return set('error', t('qr.mdnsOff'));
+  switch (qr.state) {
+    case 'creating':
+      return set('wait', t('qr.creating'));
+    case 'waiting':
+      return set('wait', t('qr.waiting'));
+    case 'pairing':
+      return set('wait', t('qr.pairing'));
+    case 'connected':
+      return set('ok', t('qr.connected'));
+    case 'paired':
+      return set('ok', qr.hint || t('pd.paired'));
+    case 'expired':
+      return set('error', t('qr.expired'));
+    default:
+      return set('error', t('qr.error', { m: qr.message || '' }));
+  }
+}
+
+function stopQr() {
+  if (!qr) return;
+  clearInterval(qr.poll);
+  clearInterval(qr.tick);
+  const { id, state } = qr;
+  if (id && !['connected', 'paired'].includes(state)) api(`/api/adb/qr/${id}`, { method: 'DELETE' }).catch(() => {});
+  qr = null;
+}
+
+async function startQr() {
+  stopQr();
+  const mine = (qr = { id: null, state: 'creating', expiresIn: 0 });
+  $('qr-code').innerHTML = '';
+  renderQrState();
+  let created;
+  try {
+    created = await api('/api/adb/qr', { method: 'POST', body: {} });
+  } catch (err) {
+    if (qr !== mine) return;
+    Object.assign(qr, { state: 'error', message: err.message });
+    return renderQrState();
+  }
+  if (qr !== mine) return; // closed or restarted meanwhile
+  Object.assign(qr, created, { mdnsOff: created.mdns === false });
+  const svg = await qrSvg(created.qr);
+  if (qr !== mine) return;
+  $('qr-code').innerHTML = svg;
+  renderQrState();
+  qr.tick = setInterval(() => {
+    if (qr !== mine) return;
+    qr.expiresIn = Math.max(0, qr.expiresIn - 1);
+    renderQrState();
+  }, 1000);
+  qr.poll = setInterval(async () => {
+    if (qr !== mine) return;
+    let st;
+    try {
+      st = await api(`/api/adb/qr/${mine.id}`);
+    } catch {
+      return;
+    }
+    if (qr !== mine) return;
+    Object.assign(qr, st);
+    renderQrState();
+    if (['connected', 'paired', 'error', 'expired'].includes(st.state)) {
+      clearInterval(qr.poll);
+      clearInterval(qr.tick);
+      if (st.state === 'connected') {
+        toast(t('pd.done'), { type: 'ok', timeout: 6000 });
+        setTimeout(() => {
+          if (qr === mine) pairDialog.close();
+        }, 1600);
+      }
+    }
+  }, 1000);
+}
+$('qr-new').addEventListener('click', () => startQr());
+
+// ------------------------------------------------------------ server session + login
 function startServerWatch() {
   stopWatching?.();
   stopWatching = watchServerDevices(renderServer, () => showLogin());
@@ -636,7 +815,7 @@ function showLogin() {
   $('server-actions').hidden = true;
   $('sb-connect').hidden = true;
   serverAuthed = false;
-  setStatus('warn', 'Cần đăng nhập', location.host);
+  setStatus(() => ({ kind: 'warn', title: t('st.signIn'), sub: location.host }));
   renderSidebar();
   renderWifiGuide();
   $('login-password').focus();
@@ -652,6 +831,7 @@ $('server-login').addEventListener('submit', async (e) => {
     $('server-login').hidden = true;
     $('server-actions').hidden = false;
     $('btn-logout').hidden = false;
+    serverAuthed = true;
     startServerWatch();
   } catch (ex) {
     err.textContent = ex.message;
@@ -679,7 +859,7 @@ getServerSession().then((session) => {
     serverMode = false;
     renderWifiGuide();
     const usbOk = 'usb' in navigator && window.isSecureContext;
-    setStatus(usbOk ? 'ok' : 'warn', 'Chế độ WebUSB', usbOk ? 'Không có server · cắm cáp vào máy này' : 'Trình duyệt không hỗ trợ WebUSB');
+    setStatus(() => ({ kind: usbOk ? 'ok' : 'warn', title: t('st.webusbMode'), sub: usbOk ? t('st.webusbSub') : t('st.noWebusb') }));
     return;
   }
   serverMode = true;
@@ -696,20 +876,26 @@ getServerSession().then((session) => {
 // so an open viewer keeps a wrapper that gets the fresh USBDevice.
 const usbKnown = new Map();
 const usbPresent = new Map();
-let addUsbDevice = () => toast('Trình duyệt này không dùng được WebUSB (cần Chrome/Edge qua HTTPS hoặc localhost).', { type: 'error' });
+let renderUsb = null;
+let addUsbDevice = () => toast(t('usb.notAvailable'), { type: 'error' });
 
 async function setupUsb() {
   const grid = $('usb-devices');
   const addButton = $('btn-usb-add');
   const panel = $('panel-usb');
 
-  const unsupported = (text) => {
+  const unsupported = (key) => {
     addButton.disabled = true;
     $('sb-usb').disabled = true;
-    panel.append(h('div', { class: 'empty' }, text));
+    const show = () => {
+      panel.querySelector('.empty')?.remove();
+      panel.append(h('div', { class: 'empty' }, t(key)));
+    };
+    show();
+    renderUsb = show;
   };
-  if (!('usb' in navigator)) return unsupported('Trình duyệt này không hỗ trợ WebUSB. Dùng Chrome hoặc Edge trên máy tính / Android.');
-  if (!window.isSecureContext) return unsupported('WebUSB chỉ chạy trên HTTPS hoặc http://localhost. Hãy mở trang qua HTTPS.');
+  if (!('usb' in navigator)) return unsupported('usb.unsupported');
+  if (!window.isSecureContext) return unsupported('usb.insecure');
 
   const usb = await import('./transport/webusb.js');
 
@@ -726,15 +912,15 @@ async function setupUsb() {
     panel.querySelector('.empty')?.remove();
     renderSidebar();
     if (!usbPresent.size) {
-      panel.append(h('div', { class: 'empty' }, 'Bấm “Thêm thiết bị USB” và chọn điện thoại trong danh sách của trình duyệt.'));
+      panel.append(h('div', { class: 'empty' }, t('usb.empty')));
       return;
     }
     for (const d of usbPresent.values()) {
       const actions = [viewButton(d)];
       if (d.connected) {
         actions.push(
-          iconButton('unlink', 'Ngắt', {
-            title: 'Giải phóng thiết bị USB (để dùng adb khác)',
+          iconButton('unlink', t('dev.disconnect'), {
+            title: t('usb.release'),
             onclick: async () => {
               await d.disconnect();
               render();
@@ -746,6 +932,7 @@ async function setupUsb() {
     }
     applyFilter();
   };
+  renderUsb = render;
 
   addUsbDevice = async () => {
     try {
@@ -761,9 +948,10 @@ async function setupUsb() {
   addButton.addEventListener('click', () => addUsbDevice());
   navigator.usb.addEventListener('connect', render);
   navigator.usb.addEventListener('disconnect', render);
-  window.addEventListener('viewer:closed', render); // show the "Ngắt" button once connected
+  window.addEventListener('viewer:closed', render); // show the "Disconnect" button once connected
   await render();
 }
 setupUsb().catch((err) => console.error(err));
 renderSidebar();
 renderWifiGuide();
+renderStatus();

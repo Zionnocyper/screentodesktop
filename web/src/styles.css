@@ -46,31 +46,29 @@
   -webkit-font-smoothing: antialiased;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
-    --bg-1: #1a1424;
-    --bg-2: #0b0910;
-    --blob-1: rgba(146, 92, 255, 0.42);
-    --blob-2: rgba(255, 122, 26, 0.26);
-    --blob-3: rgba(255, 72, 160, 0.2);
-    --blob-4: rgba(64, 140, 255, 0.24);
+:root.dark {
+  color-scheme: dark;
+  --bg-1: #1a1424;
+  --bg-2: #0b0910;
+  --blob-1: rgba(146, 92, 255, 0.42);
+  --blob-2: rgba(255, 122, 26, 0.26);
+  --blob-3: rgba(255, 72, 160, 0.2);
+  --blob-4: rgba(64, 140, 255, 0.24);
 
-    --glass: rgba(34, 30, 46, 0.48);
-    --glass-strong: rgba(255, 255, 255, 0.13);
-    --glass-inset: rgba(255, 255, 255, 0.05);
-    --glass-hover: rgba(255, 255, 255, 0.1);
-    --glass-border: rgba(255, 255, 255, 0.14);
-    --glass-edge: rgba(0, 0, 0, 0.4);
-    --glass-shine: rgba(255, 255, 255, 0.35);
+  --glass: rgba(34, 30, 46, 0.48);
+  --glass-strong: rgba(255, 255, 255, 0.13);
+  --glass-inset: rgba(255, 255, 255, 0.05);
+  --glass-hover: rgba(255, 255, 255, 0.1);
+  --glass-border: rgba(255, 255, 255, 0.14);
+  --glass-edge: rgba(0, 0, 0, 0.4);
+  --glass-shine: rgba(255, 255, 255, 0.35);
 
-    --text: #f4f1f9;
-    --muted: #a8a1b8;
-    --faint: #7b748c;
-    --accent-soft: rgba(255, 122, 26, 0.2);
-    --shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 30px 60px -24px rgba(0, 0, 0, 0.7), 0 10px 24px -14px rgba(0, 0, 0, 0.5);
-    --shadow-sm: 0 8px 20px -10px rgba(0, 0, 0, 0.6);
-  }
+  --text: #f4f1f9;
+  --muted: #a8a1b8;
+  --faint: #7b748c;
+  --accent-soft: rgba(255, 122, 26, 0.2);
+  --shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset, 0 30px 60px -24px rgba(0, 0, 0, 0.7), 0 10px 24px -14px rgba(0, 0, 0, 0.5);
+  --shadow-sm: 0 8px 20px -10px rgba(0, 0, 0, 0.6);
 }
 
 * {
@@ -410,13 +408,11 @@ textarea {
 .badge.off {
   color: var(--faint);
 }
-@media (prefers-color-scheme: dark) {
-  .badge.ok {
-    color: #4ade80;
-  }
-  .badge.warn {
-    color: #fbbf24;
-  }
+.dark .badge.ok {
+  color: #4ade80;
+}
+.dark .badge.warn {
+  color: #fbbf24;
 }
 
 /* ------------------------------------------------------------ buttons, inputs */
@@ -529,6 +525,14 @@ select:focus {
 }
 select option {
   color: #1f1b16;
+  background: #fff;
+}
+.dark select option {
+  color: #f4f1f9;
+  background: #221d2c;
+}
+.dark .hint {
+  color: #fbbf24;
 }
 .field-glass {
   display: flex;
@@ -1145,10 +1149,8 @@ kbd {
   font-size: 13px;
   color: #b45309;
 }
-@media (prefers-color-scheme: dark) {
-  .device-hint {
-    color: #fbbf24;
-  }
+.dark .device-hint {
+  color: #fbbf24;
 }
 .device-note {
   font-size: 13px;
@@ -1405,15 +1407,13 @@ code {
   border-top-color: var(--accent);
   animation: spin 0.9s linear infinite;
 }
-@media (prefers-color-scheme: dark) {
-  .step-live,
-  .pill--state.ok {
-    color: #4ade80 !important;
-  }
-  .step-live.warn,
-  .pill--state.warn {
-    color: #fbbf24 !important;
-  }
+.dark .step-live,
+.dark .pill--state.ok {
+  color: #4ade80 !important;
+}
+.dark .step-live.warn,
+.dark .pill--state.warn {
+  color: #fbbf24 !important;
 }
 .code {
   position: relative;
@@ -2026,5 +2026,172 @@ body.viewing .toast {
 @media (min-width: 901px) {
   .sb-scrim {
     display: none;
+  }
+}
+
+/* ------------------------------------------------------------ language, night mode */
+.i18n-pending body {
+  opacity: 0; /* English UI is applied by JS right after load */
+}
+.sb-quick {
+  display: grid;
+  gap: 2px;
+}
+.lang-icon {
+  border: 0;
+  cursor: pointer;
+  padding: 0;
+}
+.seg {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 99px;
+  background: var(--glass-inset);
+  border: 1px solid var(--glass-border);
+  flex: none;
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font: 700 12px/1.4 var(--font);
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.seg button[aria-checked='true'] {
+  color: #fff;
+  background: linear-gradient(160deg, var(--accent-2), var(--accent));
+  box-shadow: 0 4px 10px -4px var(--accent);
+}
+.sb-toggle:has(.switch:not(:checked)) .app-icon--indigo {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+@media (min-width: 901px) {
+  .shell.collapsed .sb-quick {
+    justify-items: center;
+  }
+  .shell.collapsed .seg {
+    display: none;
+  }
+}
+.small {
+  font-size: 13px !important;
+}
+
+/* ------------------------------------------------------------ pairing tabs + QR */
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--glass-inset);
+  border: 1px solid var(--glass-border);
+}
+.tab {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+.tab .icon {
+  width: 18px;
+  height: 18px;
+}
+.tab[aria-selected='true'] {
+  color: var(--text);
+  background: var(--glass-strong);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset, var(--shadow-sm);
+}
+.tab-panel {
+  display: grid;
+  gap: 14px;
+}
+.qr-panel {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 20px;
+}
+.qr-box {
+  position: relative;
+  padding: 12px;
+  border-radius: 20px;
+  background: #fff; /* scanners need dark-on-light, also in night mode */
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 14px 30px -14px rgba(0, 0, 0, 0.45);
+}
+.qr-code {
+  width: 220px;
+  height: 220px;
+  display: grid;
+  place-items: center;
+}
+.qr-code svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.qr-box.dim .qr-code {
+  opacity: 0.12;
+  filter: blur(2px);
+}
+.qr-box.done::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: rgba(34, 197, 94, 0.12) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2316a34a' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12.5 4.5 4.5L19 7.5'/%3E%3C/svg%3E") center / 72px no-repeat;
+}
+.qr-side {
+  display: grid;
+  gap: 8px;
+}
+.qr-side p {
+  margin: 0;
+}
+.qr-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+}
+.qr-status.wait::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--glass-border);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+.qr-status.ok {
+  color: var(--ok);
+}
+.qr-status.error {
+  color: var(--danger);
+  white-space: pre-line;
+}
+.qr-side .btn {
+  justify-self: start;
+}
+@media (max-width: 560px) {
+  .qr-panel {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center;
+  }
+  .qr-side .btn {
+    justify-self: center;
   }
 }

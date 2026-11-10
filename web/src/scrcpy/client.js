@@ -10,6 +10,7 @@ import { CanvasRenderer, H264Decoder } from './video.js';
 import { AudioPlayer } from './audio.js';
 import * as C from './control.js';
 import { AKEY } from './keycodes.js';
+import { t } from '../i18n.js';
 
 const textDecoder = new TextDecoder();
 const FLAG_SESSION = 0x80000000;
@@ -86,9 +87,9 @@ export class ScrcpyClient extends EventTarget {
     this.#emit('devicename', this.deviceName);
 
     const codecId = u32(await q.read(4), 0);
-    if (codecId === 0) throw new Error('Thiết bị đã tắt luồng video');
-    if (codecId === 1) throw new Error('Lỗi cấu hình trên thiết bị (xem log)');
-    if (codecId !== CODEC_ID.H264) throw new Error(`Codec video không hỗ trợ: 0x${codecId.toString(16)}`);
+    if (codecId === 0) throw new Error(t('c.videoDisabled'));
+    if (codecId === 1) throw new Error(t('c.configError'));
+    if (codecId !== CODEC_ID.H264) throw new Error(t('c.badVideoCodec', { id: `0x${codecId.toString(16)}` }));
 
     for (;;) {
       const h = await q.read(12);
@@ -108,18 +109,18 @@ export class ScrcpyClient extends EventTarget {
     const codecId = u32(await q.read(4), 0);
     if (codecId === 0) {
       this.audioState = 'unsupported';
-      this.#emit('audio', { state: this.audioState, message: 'Thiết bị không hỗ trợ chuyển âm thanh (cần Android 11+)' });
+      this.#emit('audio', { state: this.audioState, message: t('c.noAudio') });
       return;
     }
     if (codecId === 1) {
       this.audioState = 'error';
-      this.#emit('audio', { state: this.audioState, message: 'Không bắt được âm thanh trên thiết bị' });
+      this.#emit('audio', { state: this.audioState, message: t('c.audioCapture') });
       return;
     }
     const codec = codecId === CODEC_ID.OPUS ? 'opus' : codecId === CODEC_ID.RAW ? 'raw' : null;
     if (!codec || !this.audio) {
       this.audioState = 'error';
-      this.#emit('audio', { state: this.audioState, message: 'Codec âm thanh không hỗ trợ' });
+      this.#emit('audio', { state: this.audioState, message: t('c.badAudioCodec') });
     } else {
       this.audioState = 'playing';
       this.#emit('audio', { state: this.audioState });
@@ -146,7 +147,7 @@ export class ScrcpyClient extends EventTarget {
         const size = u16(await q.read(2), 0);
         await q.read(size);
       } else {
-        throw new Error(`Thông điệp thiết bị không xác định: ${type}`);
+        throw new Error(t('c.unknownMessage', { type }));
       }
     }
   }

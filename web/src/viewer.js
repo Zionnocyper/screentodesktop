@@ -5,6 +5,7 @@ import { AKEY } from './scrcpy/keycodes.js';
 import { attachInput } from './input.js';
 import { icon } from './icons.js';
 import { downloadBlob, toast } from './ui.js';
+import { t } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -80,30 +81,35 @@ function updateAudioButton() {
   el.audio.hidden = !playing;
   if (playing) {
     el.audio.innerHTML = icon(client.muted ? 'speakerOff' : 'speaker');
-    el.audio.dataset.tip = client.muted ? 'Bật tiếng' : 'Tắt tiếng';
+    el.audio.dataset.tip = client.muted ? t('v.unmute') : t('v.mute');
   }
 }
 
 function updateScreenPowerButton() {
   const on = session?.screenOn ?? true;
   el.screenPower.classList.toggle('active', !on);
-  el.screenPower.dataset.tip = on ? 'Tắt màn hình điện thoại (vẫn phản chiếu)' : 'Bật lại màn hình điện thoại';
+  el.screenPower.dataset.tip = on ? t('v.screenOff') : t('v.screenOn');
 }
+
+window.addEventListener('langchange', () => {
+  updateAudioButton();
+  updateScreenPowerButton();
+});
 
 async function uploadFiles(files) {
   const s = session;
   if (!s?.device.upload) return;
   for (const file of files) {
-    const t = toast(`Đang gửi ${file.name}…`, { timeout: 0 });
+    const tt = toast(t('v.sending', { name: file.name }), { timeout: 0 });
     try {
-      const result = await s.device.upload(file, (f) => t.progress(f));
-      if (result?.installed) t.done(`Đã cài đặt ${file.name}`);
+      const result = await s.device.upload(file, (f) => tt.progress(f));
+      if (result?.installed) tt.done(t('v.installed', { name: file.name }));
       else {
-        t.done(`Đã lưu vào ${result?.path ?? 'Download'}`);
+        tt.done(t('v.savedTo', { path: result?.path ?? 'Download' }));
         if (result?.path) s.client?.scanFile(result.path);
       }
     } catch (err) {
-      t.done(`Lỗi khi gửi ${file.name}:\n${err.message}`, 'error');
+      tt.done(t('v.sendFailed', { name: file.name, error: err.message }), 'error');
     }
   }
 }
@@ -125,14 +131,14 @@ const actions = {
   },
   keyboard: () => {
     el.keys.focus();
-    toast('Đang nhận phím — gõ để nhập vào điện thoại', { timeout: 2000 });
+    toast(t('v.keyboardOn'), { timeout: 2000 });
   },
   paste: async (c) => {
     try {
       const text = await navigator.clipboard.readText();
       if (text) c.paste(text);
     } catch {
-      toast('Trình duyệt không cho đọc clipboard. Bấm vào màn hình rồi dùng Ctrl+V.', { type: 'error' });
+      toast(t('v.pasteBlocked'), { type: 'error' });
     }
   },
   screenshot: async (c) => {
@@ -291,10 +297,10 @@ export async function openViewer(device, options) {
   el.canvas.style.height = '0px';
   el.audio.hidden = true;
   updateScreenPowerButton();
-  setStatus('Đang kết nối…');
+  setStatus(t('v.connecting'));
 
   if (!H264Decoder.supported) {
-    setStatus('Trình duyệt không hỗ trợ WebCodecs (VideoDecoder).\nHãy dùng Chrome, Edge, Firefox 130+ hoặc Safari 17+.', { error: true, busy: false });
+    setStatus(t('v.noWebcodecs'), { error: true, busy: false });
     return;
   }
 
@@ -322,7 +328,7 @@ export async function openViewer(device, options) {
     return;
   }
 
-  setStatus('Đang chờ khung hình đầu tiên…');
+  setStatus(t('v.waitFrame'));
   const client = new ScrcpyClient(conn, { canvas: el.canvas, audioContext: s.audioContext, options });
   s.client = client;
 
@@ -344,7 +350,7 @@ export async function openViewer(device, options) {
   client.addEventListener('clipboard', (e) => {
     if (!options.clipboardAutosync) return;
     navigator.clipboard?.writeText(e.detail).then(
-      () => toast('Đã sao chép clipboard từ điện thoại', { timeout: 1800 }),
+      () => toast(t('v.clipboardCopied'), { timeout: 1800 }),
       () => {},
     );
   });
@@ -353,11 +359,11 @@ export async function openViewer(device, options) {
     s.detachInput?.();
     if (s.minimized) {
       // nobody is looking at the viewer: report and end the session
-      toast(`${device.name}: ${reason ? reason.message || String(reason) : 'phiên đã kết thúc'}`, { type: reason ? 'error' : 'info' });
+      toast(`${device.name}: ${reason ? reason.message || String(reason) : t('v.endedLower')}`, { type: reason ? 'error' : 'info' });
       closeViewer();
       return;
     }
-    setStatus(reason ? reason.message || String(reason) : 'Phiên đã kết thúc', { error: Boolean(reason), busy: false });
+    setStatus(reason ? reason.message || String(reason) : t('v.ended'), { error: Boolean(reason), busy: false });
   });
 
   s.detachInput = attachInput(client, el.canvas, el.keys);

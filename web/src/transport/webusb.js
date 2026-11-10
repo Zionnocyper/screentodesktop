@@ -6,6 +6,7 @@ import { AdbDaemonWebUsbDevice, AdbDaemonWebUsbDeviceManager } from '@yume-chan/
 import AdbWebCredentialStore from '@yume-chan/adb-credential-web';
 import { ReadableStream } from '@yume-chan/stream-extra';
 import { ByteQueue } from '../scrcpy/byte-queue.js';
+import { t } from '../i18n.js';
 import {
   DEVICE_SERVER_PATH,
   SERVER_FILENAME,
@@ -26,7 +27,7 @@ let jarPromise = null;
 function fetchServerJar() {
   jarPromise ??= fetch(new URL(SERVER_FILENAME, document.baseURI))
     .then((res) => {
-      if (!res.ok) throw new Error(`Không tải được ${SERVER_FILENAME} (HTTP ${res.status})`);
+      if (!res.ok) throw new Error(t('tr.download', { file: SERVER_FILENAME, status: res.status }));
       return res.arrayBuffer();
     })
     .then((buf) => new Uint8Array(buf))
@@ -103,20 +104,20 @@ export class UsbDevice {
   }
 
   async #connectOnce(onStatus) {
-    onStatus('Đang mở thiết bị USB…');
+    onStatus(t('tr.openingUsb'));
     let connection;
     try {
       connection = await this.device.connect();
     } catch (err) {
       if (err instanceof AdbDaemonWebUsbDevice.DeviceBusyError) {
         throw Object.assign(
-          new Error('Thiết bị đang bị chương trình khác giữ (thường là adb). Chạy "adb kill-server" rồi thử lại.'),
+          new Error(t('tr.busy')),
           { permanent: true },
         );
       }
       throw err;
     }
-    onStatus('Đang xác thực ADB… Hãy bấm "Cho phép" trên điện thoại nếu được hỏi.');
+    onStatus(t('tr.auth'));
     const transport = await AdbDaemonTransport.authenticate({
       serial: this.serial,
       connection,
@@ -150,7 +151,7 @@ export class UsbDevice {
           } catch (err) {
             const transient = !err.permanent && /disconnected|closed unexpectedly|NetworkError|transfer/i.test(String(err?.message ?? err));
             if (!transient || attempt >= 3) throw err;
-            onStatus('Điện thoại vừa kết nối lại cổng USB, đang thử lại…');
+            onStatus(t('tr.reenumerated'));
             const previousRaw = this.device.raw;
             await previousRaw.close().catch(() => {});
             const fresh = await this.#waitForReconnect(previousRaw);
@@ -191,13 +192,13 @@ export class UsbDevice {
     const options = normalizeOptions(input);
     const adb = await this.adb(onStatus);
 
-    onStatus('Đang tải scrcpy-server…');
+    onStatus(t('tr.downloadingServer'));
     const jar = await fetchServerJar();
-    onStatus('Đang đẩy scrcpy-server lên thiết bị…');
+    onStatus(t('tr.pushing'));
     await this.#push(adb, bytesStream(jar), DEVICE_SERVER_PATH);
 
     const scid = randomScid();
-    onStatus('Đang khởi động server trên thiết bị…');
+    onStatus(t('tr.starting'));
     const shell = await adb.createSocket(`shell:${buildServerCommand(scid, options)}`);
 
     const logs = [];
@@ -239,9 +240,9 @@ export class UsbDevice {
       while (!video) {
         if (shellEnded) {
           const errors = logs.filter((l) => /ERROR|Exception/i.test(l));
-          throw new Error(errors.slice(-3).join('\n') || 'scrcpy-server đã thoát trước khi kết nối');
+          throw new Error(errors.slice(-3).join('\n') || t('tr.exited'));
         }
-        if (Date.now() > deadline) throw new Error('Hết thời gian chờ scrcpy-server');
+        if (Date.now() > deadline) throw new Error(t('tr.timeout'));
         try {
           const socket = await adb.createSocket(service);
           const reader = socket.readable.getReader();
@@ -322,7 +323,7 @@ export class UsbDevice {
       const remote = `/data/local/tmp/std-upload-${Date.now().toString(36)}.apk`;
       await this.#push(adb, stream, remote);
       const output = await readAll(await adb.createSocket(`shell:pm install -r '${remote}'; rm -f '${remote}'`));
-      if (!/Success/.test(output)) throw new Error(output.trim() || 'Cài đặt thất bại');
+      if (!/Success/.test(output)) throw new Error(output.trim() || t('tr.installFailed'));
       return { ok: true, installed: true, output: output.trim() };
     }
     const remote = `/sdcard/Download/${name}`;

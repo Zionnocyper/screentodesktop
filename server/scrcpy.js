@@ -7,6 +7,7 @@ import {
   randomScid,
   socketService,
 } from '../web/src/shared/scrcpy-options.js';
+import { t } from './i18n.js';
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -26,15 +27,15 @@ function withTimeout(promise, ms, message) {
  *   options, close(): void, exited: Promise<string>
  * }>}
  */
-export async function startScrcpy({ adb, serial, jarPath, options, onStatus = () => {}, onLog = () => {} }) {
+export async function startScrcpy({ adb, serial, jarPath, options, lang = 'vi', onStatus = () => {}, onLog = () => {} }) {
   const opts = normalizeOptions(options);
 
-  onStatus('Đang đẩy scrcpy-server lên thiết bị…');
+  onStatus(t(lang, 'pushing'));
   await adb.push(serial, fs.createReadStream(jarPath), DEVICE_SERVER_PATH, 0o644);
 
   const scid = randomScid();
   const command = buildServerCommand(scid, opts);
-  onStatus('Đang khởi động server trên thiết bị…');
+  onStatus(t(lang, 'starting'));
   const shell = await adb.openDeviceService(serial, `shell:${command}`);
 
   // Collect server output (logs and fatal errors).
@@ -74,7 +75,7 @@ export async function startScrcpy({ adb, serial, jarPath, options, onStatus = ()
   const service = socketService(scid);
   const failure = () => {
     const errors = logLines.filter((l) => /ERROR|Exception|error:/i.test(l));
-    return new Error(errors.length ? errors.slice(-3).join('\n') : 'scrcpy-server đã thoát trước khi kết nối');
+    return new Error(errors.length ? errors.slice(-3).join('\n') : t(lang, 'serverExited'));
   };
 
   try {
@@ -86,7 +87,7 @@ export async function startScrcpy({ adb, serial, jarPath, options, onStatus = ()
         await sleep(50); // let the last output arrive
         throw failure();
       }
-      if (Date.now() > deadline) throw new Error('Hết thời gian chờ scrcpy-server');
+      if (Date.now() > deadline) throw new Error(t(lang, 'serverTimeout'));
       try {
         const conn = await adb.openDeviceService(serial, service);
         try {
