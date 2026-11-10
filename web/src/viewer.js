@@ -26,11 +26,26 @@ const el = {
   file: $('v-file'),
   audio: $('v-audio'),
   close: $('v-close'),
+  minimize: $('v-minimize'),
   screenPower: document.querySelector('[data-action="screenPower"]'),
 };
 
-let session = null; // { device, options, client, detachInput, audioContext, cancelled, screenOn }
+let session = null; // { device, options, client, detachInput, audioContext, cancelled, screenOn, minimized }
 let historyPushed = false;
+let ignorePop = false;
+
+/** Notifies the rest of the page (sidebar "now viewing" card). */
+function emit(type, detail = {}) {
+  window.dispatchEvent(new CustomEvent(type, { detail }));
+}
+
+function emitState(state) {
+  emit('viewer:state', { state, device: session?.device ?? null, name: session?.device?.name ?? '' });
+}
+
+export function currentSession() {
+  return session ? { device: session.device, minimized: Boolean(session.minimized) } : null;
+}
 
 function setStatus(text, { error = false, busy = true } = {}) {
   el.overlay.hidden = false;
@@ -65,14 +80,14 @@ function updateAudioButton() {
   el.audio.hidden = !playing;
   if (playing) {
     el.audio.innerHTML = icon(client.muted ? 'speakerOff' : 'speaker');
-    el.audio.title = client.muted ? 'Bật tiếng' : 'Tắt tiếng';
+    el.audio.dataset.tip = client.muted ? 'Bật tiếng' : 'Tắt tiếng';
   }
 }
 
 function updateScreenPowerButton() {
   const on = session?.screenOn ?? true;
   el.screenPower.classList.toggle('active', !on);
-  el.screenPower.title = on ? 'Tắt màn hình điện thoại (vẫn phản chiếu)' : 'Bật lại màn hình điện thoại';
+  el.screenPower.dataset.tip = on ? 'Tắt màn hình điện thoại (vẫn phản chiếu)' : 'Bật lại màn hình điện thoại';
 }
 
 async function uploadFiles(files) {
@@ -155,6 +170,7 @@ el.audio.addEventListener('click', () => {
 });
 
 el.close.addEventListener('click', () => closeViewer());
+el.minimize.addEventListener('click', () => minimizeViewer());
 el.back.addEventListener('click', () => closeViewer());
 el.retry.addEventListener('click', () => {
   if (session) openViewer(session.device, session.options);
@@ -188,11 +204,53 @@ el.stage.addEventListener('drop', (e) => {
 });
 
 window.addEventListener('popstate', () => {
-  if (session) {
+  if (ignorePop) {
+    ignorePop = false;
+    return;
+  }
+  if (session && !session.minimized) {
     historyPushed = false;
     closeViewer();
   }
 });
+
+function pushHistory() {
+  if (!historyPushed) {
+    history.pushState({ viewer: true }, '');
+    historyPushed = true;
+  }
+}
+
+function popHistory() {
+  if (historyPushed) {
+    historyPushed = false;
+    ignorePop = true;
+    history.back();
+  }
+}
+
+/** Hides the viewer but keeps the session (video, audio) running. */
+export function minimizeViewer() {
+  if (!session || session.minimized) return;
+  session.minimized = true;
+  el.root.hidden = true;
+  document.body.classList.remove('viewing');
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  el.keys.blur();
+  popHistory();
+  emitState('minimized');
+}
+
+export function restoreViewer() {
+  if (!session) return;
+  session.minimized = false;
+  el.root.hidden = false;
+  document.body.classList.add('viewing');
+  pushHistory();
+  layout();
+  el.keys.focus({ preventScroll: true });
+  emitState('open');
+}
 
 function teardown() {
   if (!session) return;
@@ -208,25 +266,21 @@ export function closeViewer() {
   el.root.hidden = true;
   document.body.classList.remove('viewing');
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  if (historyPushed) {
-    historyPushed = false;
-    history.back();
-  }
+  popHistory();
+  emitState('closed');
   window.dispatchEvent(new Event('viewer:closed'));
 }
 
 /** Must be called from a user gesture (audio needs one). */
 export async function openViewer(device, options) {
   teardown();
-  const s = { device, options, client: null, detachInput: null, audioContext: null, cancelled: false, screenOn: !options.turnScreenOff };
+  const s = { device, options, client: null, detachInput: null, audioContext: null, cancelled: false, screenOn: !options.turnScreenOff, minimized: false };
   session = s;
 
   el.root.hidden = false;
   document.body.classList.add('viewing');
-  if (!historyPushed) {
-    history.pushState({ viewer: true }, '');
-    historyPushed = true;
-  }
+  pushHistory();
+  emitState('open');
   el.name.textContent = device.name;
   el.stats.textContent = '';
   el.log.textContent = '';
@@ -281,6 +335,7 @@ export async function openViewer(device, options) {
     const { fps, kbps, size } = e.detail;
     if (!size) return;
     el.stats.textContent = `${size.width}×${size.height} · ${Math.round(fps)} fps · ${(kbps / 1000).toFixed(1)} Mbps`;
+    emit('viewer:stats', { fps, kbps, size, maxFps: options.maxFps });
   });
   client.addEventListener('audio', (e) => {
     updateAudioButton();
@@ -296,6 +351,12 @@ export async function openViewer(device, options) {
   client.closed.then((reason) => {
     if (s.cancelled || session !== s) return;
     s.detachInput?.();
+    if (s.minimized) {
+      // nobody is looking at the viewer: report and end the session
+      toast(`${device.name}: ${reason ? reason.message || String(reason) : 'phiên đã kết thúc'}`, { type: reason ? 'error' : 'info' });
+      closeViewer();
+      return;
+    }
     setStatus(reason ? reason.message || String(reason) : 'Phiên đã kết thúc', { error: Boolean(reason), busy: false });
   });
 

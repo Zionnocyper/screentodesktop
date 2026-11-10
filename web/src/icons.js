@@ -33,6 +33,13 @@ const P = {
   alert: '<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.5h.01"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  search: '<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>',
+  chevronLeft: '<path d="m14.5 6-6 6 6 6"/>',
+  chevronRight: '<path d="m9.5 6 6 6-6 6"/>',
+  stop: '<rect x="7" y="7" width="10" height="10" rx="2.2"/>',
+  minimize: '<path d="M5 19h14"/><path d="m8 11 4 4 4-4"/>',
+  book: '<path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v15H7.5A2.5 2.5 0 0 0 5 20.5z"/><path d="M5 20.5A2.5 2.5 0 0 1 7.5 18H19v3H7.5"/>',
+  bolt: '<path d="M13 2.5 5 13.5h6l-1 8 8-11h-6z"/>',
 };
 
 export function icon(name, cls = '') {

@@ -5,231 +5,340 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>ScreenToDesktop</title>
     <meta name="description" content="Phản chiếu và điều khiển điện thoại Android ngay trên trình duyệt." />
-    <meta name="theme-color" content="#0b0e14" />
+    <meta name="theme-color" content="#e9e1d6" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#120f1a" media="(prefers-color-scheme: dark)" />
     <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
   </head>
   <body>
-    <header class="topbar">
-      <div class="brand">
-        <span class="brand-mark" data-icon="monitor"></span>
-        <span class="brand-name">Screen<b>ToDesktop</b></span>
-      </div>
-      <div class="topbar-actions">
-        <button class="btn ghost" id="btn-settings" type="button">
-          <span data-icon="sliders"></span><span class="hide-sm">Chất lượng</span>
-        </button>
-        <button class="btn ghost" id="btn-logout" type="button" hidden>
-          <span data-icon="logout"></span><span class="hide-sm">Đăng xuất</span>
-        </button>
-      </div>
-    </header>
+    <div class="backdrop" aria-hidden="true">
+      <span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><span class="blob b4"></span>
+    </div>
 
-    <main class="home">
-      <section class="hero">
-        <h1>Màn hình điện thoại Android, ngay trên trình duyệt</h1>
-        <p class="lead">
-          Xem và điều khiển bằng chuột, bàn phím; có âm thanh, clipboard, kéo-thả file và cài APK. Chạy local hoặc
-          trên máy chủ riêng.
-        </p>
-        <div id="warnings" class="warnings"></div>
-      </section>
-
-      <section class="panel" id="panel-usb">
-        <div class="panel-head">
-          <div class="panel-title">
-            <span class="panel-icon" data-icon="usb"></span>
-            <div>
-              <h2>USB trên máy này</h2>
-              <p class="muted">Trình duyệt kết nối thẳng tới điện thoại qua WebUSB — không cần cài gì thêm.</p>
-            </div>
+    <div class="shell" id="shell">
+      <!-- ================================================= glass sidebar -->
+      <aside class="sidebar glass" id="sidebar" aria-label="Thanh điều hướng">
+        <div class="sb-head">
+          <span class="app-icon app-icon--brand app-icon--lg" data-icon="monitor"></span>
+          <div class="sb-title sb-text">
+            <b>ScreenToDesktop</b>
+            <small>Phản chiếu Android</small>
           </div>
-          <button class="btn primary" id="btn-usb-add" type="button">
-            <span data-icon="plus"></span><span>Thêm thiết bị USB</span>
+          <span class="pill pill--accent sb-text">v5</span>
+          <button class="sb-collapse" id="sb-collapse" type="button" aria-label="Thu gọn thanh bên" data-tip="Thu gọn">
+            <span data-icon="chevronLeft"></span>
           </button>
         </div>
-        <div class="device-grid" id="usb-devices"></div>
-      </section>
 
-      <section class="panel" id="panel-server" hidden>
-        <div class="panel-head">
-          <div class="panel-title">
-            <span class="panel-icon" data-icon="server"></span>
-            <div>
-              <h2>Thiết bị trên server</h2>
-              <p class="muted" id="server-sub">Điện thoại cắm cáp vào máy chạy server, hoặc kết nối không dây qua Wi-Fi.</p>
+        <label class="sb-search" data-tip="Tìm thiết bị">
+          <span data-icon="search"></span>
+          <input id="sb-filter" type="search" placeholder="Tìm thiết bị" aria-label="Tìm thiết bị" autocomplete="off" />
+          <kbd>Ctrl K</kbd>
+        </label>
+
+        <nav class="sb-nav" id="sb-nav">
+          <span class="sb-hover" aria-hidden="true"></span>
+
+          <div class="sb-label">Thiết bị</div>
+          <div class="sb-group" id="sb-devices"></div>
+
+          <div class="sb-label">Kết nối</div>
+          <button class="sb-item" type="button" id="sb-usb" data-tip="Thêm thiết bị USB">
+            <span class="app-icon app-icon--blue" data-icon="usb"></span>
+            <span class="sb-text">Thêm thiết bị USB</span>
+          </button>
+          <button class="sb-item" type="button" id="sb-pair" data-tip="Ghép đôi Wi-Fi" hidden>
+            <span class="app-icon app-icon--green" data-icon="wifi"></span>
+            <span class="sb-text">Ghép đôi Wi-Fi</span>
+            <span class="badge-count badge-count--red" id="sb-pair-count" hidden></span>
+          </button>
+          <button class="sb-item" type="button" id="sb-connect" data-tip="Kết nối bằng IP" hidden>
+            <span class="app-icon app-icon--teal" data-icon="link"></span>
+            <span class="sb-text">Kết nối bằng IP</span>
+          </button>
+
+          <div class="sb-label">Ứng dụng</div>
+          <button class="sb-item" type="button" id="btn-settings" data-tip="Chất lượng">
+            <span class="app-icon app-icon--purple" data-icon="sliders"></span>
+            <span class="sb-text">Chất lượng</span>
+            <span class="badge-count" id="sb-quality"></span>
+          </button>
+          <button class="sb-item" type="button" id="sb-guide" data-tip="Hướng dẫn">
+            <span class="app-icon app-icon--orange" data-icon="book"></span>
+            <span class="sb-text">Hướng dẫn</span>
+          </button>
+        </nav>
+
+        <div class="sb-session glass-inset" id="sb-session" hidden>
+          <div class="sb-session-row">
+            <span class="app-icon app-icon--graphite app-icon--lg live" data-icon="phone"></span>
+            <div class="sb-session-text sb-text">
+              <b id="sb-session-name"></b>
+              <small id="sb-session-stats">Đang chạy nền</small>
+            </div>
+            <div class="sb-session-actions">
+              <button class="round-btn" id="sb-session-open" type="button" aria-label="Mở màn hình" data-tip="Mở"><span data-icon="maximize"></span></button>
+              <button class="round-btn round-btn--accent" id="sb-session-stop" type="button" aria-label="Dừng phiên" data-tip="Dừng"><span data-icon="stop"></span></button>
             </div>
           </div>
-          <div class="panel-actions" id="server-actions">
-            <button class="btn primary" id="btn-pair" type="button">
-              <span data-icon="link"></span><span>Ghép đôi Wi-Fi</span>
+          <div class="sb-meter sb-text"><span id="sb-session-meter"></span></div>
+        </div>
+
+        <label class="sb-toggle" data-tip="Âm thanh">
+          <span class="app-icon app-icon--pink" data-icon="speaker"></span>
+          <span class="sb-text">Âm thanh</span>
+          <input type="checkbox" class="switch sb-text" id="sb-audio" />
+        </label>
+
+        <div class="sb-foot">
+          <span class="avatar" data-icon="server"></span>
+          <i class="status-dot" id="sb-status-dot"></i>
+          <div class="sb-foot-text sb-text">
+            <b id="sb-status-title">Đang kiểm tra…</b>
+            <small id="sb-status-sub"></small>
+          </div>
+          <button class="icon-btn icon-btn--sm sb-text" id="btn-logout" type="button" aria-label="Đăng xuất" data-tip="Đăng xuất" hidden>
+            <span data-icon="logout"></span>
+          </button>
+        </div>
+      </aside>
+      <div class="sb-scrim" id="sb-scrim"></div>
+
+      <!-- ================================================= content -->
+      <main class="home" id="main">
+        <header class="mobile-bar glass">
+          <button class="icon-btn" id="sb-open" type="button" aria-label="Mở thanh bên"><span data-icon="menu"></span></button>
+          <span class="app-icon app-icon--brand" data-icon="monitor"></span>
+          <b>ScreenToDesktop</b>
+        </header>
+
+        <section class="hero">
+          <span class="pill pill--glass"><span data-icon="bolt"></span>scrcpy <span id="scrcpy-version"></span> · WebCodecs · WebUSB</span>
+          <h1>Màn hình điện thoại Android, ngay trên trình duyệt</h1>
+          <p class="lead">
+            Xem và điều khiển bằng chuột, bàn phím; có âm thanh, clipboard, kéo-thả file và cài APK. Kết nối bằng cáp USB
+            hoặc không dây qua Wi-Fi; chạy local hay trên máy chủ riêng.
+          </p>
+          <div id="warnings" class="warnings"></div>
+        </section>
+
+        <section class="panel glass" id="panel-usb">
+          <div class="panel-head">
+            <div class="panel-title">
+              <span class="app-icon app-icon--blue app-icon--lg" data-icon="usb"></span>
+              <div>
+                <h2>USB trên máy này</h2>
+                <p class="muted">Trình duyệt kết nối thẳng tới điện thoại qua WebUSB — không cần cài gì thêm.</p>
+              </div>
+            </div>
+            <button class="btn primary" id="btn-usb-add" type="button">
+              <span data-icon="plus"></span><span>Thêm thiết bị USB</span>
             </button>
-            <form class="inline-form" id="form-connect" autocomplete="off">
-              <input id="connect-address" name="address" placeholder="IP:cổng, vd 192.168.1.10:5555" aria-label="Địa chỉ ADB Wi-Fi" />
-              <button class="btn" type="submit"><span data-icon="wifi"></span><span>Kết nối</span></button>
-            </form>
           </div>
-        </div>
-        <form class="login" id="server-login" hidden autocomplete="on">
-          <p>Server này yêu cầu mật khẩu.</p>
-          <div class="inline-form">
-            <input type="password" id="login-password" name="password" placeholder="Mật khẩu" autocomplete="current-password" required />
-            <button class="btn primary" type="submit">Đăng nhập</button>
+          <div class="device-grid" id="usb-devices"></div>
+        </section>
+
+        <section class="panel glass" id="panel-server" hidden>
+          <div class="panel-head">
+            <div class="panel-title">
+              <span class="app-icon app-icon--indigo app-icon--lg" data-icon="server"></span>
+              <div>
+                <h2>Thiết bị trên server</h2>
+                <p class="muted" id="server-sub">Điện thoại cắm cáp vào máy chạy server, hoặc kết nối không dây qua Wi-Fi.</p>
+              </div>
+            </div>
+            <div class="panel-actions" id="server-actions">
+              <button class="btn primary" id="btn-pair" type="button">
+                <span data-icon="wifi"></span><span>Ghép đôi Wi-Fi</span>
+              </button>
+              <form class="inline-form" id="form-connect" autocomplete="off">
+                <label class="field-glass">
+                  <span data-icon="link"></span>
+                  <input id="connect-address" name="address" placeholder="IP:cổng, vd 192.168.1.10:5555" aria-label="Địa chỉ ADB Wi-Fi" />
+                </label>
+                <button class="btn" type="submit"><span>Kết nối</span></button>
+              </form>
+            </div>
           </div>
-          <p class="error" id="login-error" hidden></p>
-        </form>
-        <div class="device-grid" id="server-devices"></div>
-        <div class="discovered" id="server-discovered" hidden>
-          <h3><span data-icon="wifi"></span>Tìm thấy trong mạng</h3>
-          <div class="device-grid" id="discovered-list"></div>
-        </div>
-      </section>
+          <form class="login glass-inset" id="server-login" hidden autocomplete="on">
+            <p>Server này yêu cầu mật khẩu.</p>
+            <div class="inline-form">
+              <label class="field-glass">
+                <span data-icon="logout"></span>
+                <input type="password" id="login-password" name="password" placeholder="Mật khẩu" autocomplete="current-password" required />
+              </label>
+              <button class="btn primary" type="submit">Đăng nhập</button>
+            </div>
+            <p class="error" id="login-error" hidden></p>
+          </form>
+          <div class="device-grid" id="server-devices"></div>
+          <div class="discovered" id="server-discovered" hidden>
+            <h3><span data-icon="wifi"></span>Tìm thấy trong mạng</h3>
+            <div class="device-grid" id="discovered-list"></div>
+          </div>
+        </section>
 
-      <section class="panel guide">
-        <h2>Bắt đầu nhanh</h2>
-        <ol class="steps">
-          <li>
-            <b>Bật Gỡ lỗi USB</b> trên điện thoại: Cài đặt → Thông tin điện thoại → chạm 7 lần vào <i>Số hiệu bản tạo</i>,
-            rồi vào Tùy chọn nhà phát triển → bật <i>Gỡ lỗi USB</i>.
-          </li>
-          <li>
-            Cắm cáp USB. Chọn <b>Thêm thiết bị USB</b> (WebUSB) hoặc dùng danh sách <b>Thiết bị trên server</b>.
-            Không muốn dùng cáp (Android 11+): bật <i>Gỡ lỗi không dây</i> và bấm <b>Ghép đôi Wi-Fi</b>.
-          </li>
-          <li>Chấp nhận hộp thoại <i>“Cho phép gỡ lỗi USB?”</i> trên điện thoại, rồi bấm <b>Xem</b>.</li>
-        </ol>
-        <div class="shortcuts">
-          <div><kbd>Chuột trái</kbd> chạm / vuốt</div>
-          <div><kbd>Chuột phải</kbd> Quay lại (bật màn hình)</div>
-          <div><kbd>Chuột giữa</kbd> Màn hình chính</div>
-          <div><kbd>Ctrl</kbd> + kéo — thu phóng 2 ngón</div>
-          <div><kbd>Ctrl</kbd>+<kbd>V</kbd> dán vào điện thoại</div>
-          <div>Kéo-thả file vào màn hình để gửi / cài APK</div>
-        </div>
-      </section>
+        <section class="panel glass guide" id="guide">
+          <div class="panel-title">
+            <span class="app-icon app-icon--orange app-icon--lg" data-icon="book"></span>
+            <h2>Bắt đầu nhanh</h2>
+          </div>
+          <ol class="steps">
+            <li>
+              <b>Bật Gỡ lỗi USB</b> trên điện thoại: Cài đặt → Thông tin điện thoại → chạm 7 lần vào <i>Số hiệu bản tạo</i>,
+              rồi vào Tùy chọn nhà phát triển → bật <i>Gỡ lỗi USB</i>.
+            </li>
+            <li>
+              Cắm cáp USB. Chọn <b>Thêm thiết bị USB</b> (WebUSB) hoặc dùng danh sách <b>Thiết bị trên server</b>.
+              Không muốn dùng cáp (Android 11+): bật <i>Gỡ lỗi không dây</i> và bấm <b>Ghép đôi Wi-Fi</b>.
+            </li>
+            <li>Chấp nhận hộp thoại <i>“Cho phép gỡ lỗi USB?”</i> trên điện thoại, rồi bấm <b>Xem</b>.</li>
+          </ol>
+          <div class="shortcuts">
+            <div><kbd>Chuột trái</kbd> chạm / vuốt</div>
+            <div><kbd>Chuột phải</kbd> Quay lại (bật màn hình)</div>
+            <div><kbd>Chuột giữa</kbd> Màn hình chính</div>
+            <div><kbd>Ctrl</kbd> + kéo — thu phóng 2 ngón</div>
+            <div><kbd>Ctrl</kbd>+<kbd>V</kbd> dán vào điện thoại</div>
+            <div><kbd>Ctrl</kbd>+<kbd>K</kbd> tìm thiết bị</div>
+            <div>Kéo-thả file vào màn hình để gửi / cài APK</div>
+          </div>
+        </section>
 
-      <footer class="footer muted">Dựa trên scrcpy-server <span id="scrcpy-version"></span> · WebCodecs · WebUSB</footer>
-    </main>
+        <footer class="footer muted">ScreenToDesktop · mã nguồn mở · scrcpy-server © Genymobile (Apache 2.0)</footer>
+      </main>
+    </div>
 
+    <!-- ================================================= viewer -->
     <div class="viewer" id="viewer" hidden>
-      <div class="viewer-bar">
-        <button class="icon-btn" id="v-close" type="button" title="Đóng" aria-label="Đóng"><span data-icon="close"></span></button>
+      <div class="viewer-backdrop" aria-hidden="true"></div>
+      <div class="viewer-bar glass">
+        <button class="icon-btn" id="v-close" type="button" aria-label="Đóng" data-tip="Đóng"><span data-icon="close"></span></button>
+        <span class="app-icon app-icon--graphite live" data-icon="phone"></span>
         <div class="viewer-title">
           <b id="v-name"></b>
           <span id="v-stats"></span>
         </div>
         <div class="viewer-actions">
-          <button class="icon-btn" id="v-audio" type="button" title="Âm thanh" aria-label="Bật/tắt âm thanh" hidden></button>
-          <button class="icon-btn" data-action="screenshot" type="button" title="Chụp màn hình" aria-label="Chụp màn hình"><span data-icon="camera"></span></button>
-          <button class="icon-btn" data-action="upload" type="button" title="Gửi file / cài APK" aria-label="Gửi file"><span data-icon="upload"></span></button>
-          <button class="icon-btn" data-action="fullscreen" type="button" title="Toàn màn hình" aria-label="Toàn màn hình"><span data-icon="maximize"></span></button>
+          <button class="icon-btn" id="v-audio" type="button" aria-label="Bật/tắt âm thanh" data-tip="Âm thanh" hidden></button>
+          <button class="icon-btn" data-action="screenshot" type="button" aria-label="Chụp màn hình" data-tip="Chụp màn hình"><span data-icon="camera"></span></button>
+          <button class="icon-btn" data-action="upload" type="button" aria-label="Gửi file" data-tip="Gửi file / cài APK"><span data-icon="upload"></span></button>
+          <button class="icon-btn" data-action="fullscreen" type="button" aria-label="Toàn màn hình" data-tip="Toàn màn hình"><span data-icon="maximize"></span></button>
+          <button class="icon-btn" id="v-minimize" type="button" aria-label="Thu nhỏ, chạy nền" data-tip="Thu nhỏ (chạy nền)"><span data-icon="minimize"></span></button>
         </div>
       </div>
       <div class="viewer-body">
         <div class="stage" id="v-stage">
           <canvas id="v-canvas"></canvas>
           <div class="stage-overlay" id="v-overlay">
-            <div class="spinner" id="v-spinner"></div>
-            <p id="v-status"></p>
-            <pre id="v-log" hidden></pre>
-            <div class="overlay-actions" id="v-overlay-actions" hidden>
-              <button class="btn" type="button" id="v-retry"><span data-icon="refresh"></span><span>Thử lại</span></button>
-              <button class="btn ghost" type="button" id="v-back">Đóng</button>
+            <div class="overlay-card glass">
+              <div class="spinner" id="v-spinner"></div>
+              <p id="v-status"></p>
+              <pre id="v-log" hidden></pre>
+              <div class="overlay-actions" id="v-overlay-actions" hidden>
+                <button class="btn primary" type="button" id="v-retry"><span data-icon="refresh"></span><span>Thử lại</span></button>
+                <button class="btn" type="button" id="v-back">Đóng</button>
+              </div>
             </div>
           </div>
-          <div class="drop-hint" id="v-drop" hidden>
-            <span data-icon="upload"></span>
+          <div class="drop-hint glass" id="v-drop" hidden>
+            <span class="app-icon app-icon--orange app-icon--lg" data-icon="upload"></span>
             <p>Thả file để gửi vào điện thoại<br /><small>APK sẽ được cài đặt · file khác vào thư mục Download</small></p>
           </div>
         </div>
-        <nav class="rail" aria-label="Phím điều khiển">
-          <button class="icon-btn" data-action="back" type="button" title="Quay lại" aria-label="Quay lại"><span data-icon="back"></span></button>
-          <button class="icon-btn" data-action="home" type="button" title="Màn hình chính" aria-label="Màn hình chính"><span data-icon="home"></span></button>
-          <button class="icon-btn" data-action="recents" type="button" title="Ứng dụng gần đây" aria-label="Ứng dụng gần đây"><span data-icon="recents"></span></button>
+        <nav class="rail glass" aria-label="Phím điều khiển">
+          <button class="rail-btn" data-action="back" type="button" aria-label="Quay lại" data-tip="Quay lại"><span data-icon="back"></span></button>
+          <button class="rail-btn" data-action="home" type="button" aria-label="Màn hình chính" data-tip="Màn hình chính"><span data-icon="home"></span></button>
+          <button class="rail-btn" data-action="recents" type="button" aria-label="Ứng dụng gần đây" data-tip="Ứng dụng gần đây"><span data-icon="recents"></span></button>
           <span class="rail-sep"></span>
-          <button class="icon-btn" data-action="volUp" type="button" title="Tăng âm lượng" aria-label="Tăng âm lượng"><span data-icon="volUp"></span></button>
-          <button class="icon-btn" data-action="volDown" type="button" title="Giảm âm lượng" aria-label="Giảm âm lượng"><span data-icon="volDown"></span></button>
-          <button class="icon-btn" data-action="power" type="button" title="Nút nguồn" aria-label="Nút nguồn"><span data-icon="power"></span></button>
+          <button class="rail-btn" data-action="volUp" type="button" aria-label="Tăng âm lượng" data-tip="Tăng âm lượng"><span data-icon="volUp"></span></button>
+          <button class="rail-btn" data-action="volDown" type="button" aria-label="Giảm âm lượng" data-tip="Giảm âm lượng"><span data-icon="volDown"></span></button>
+          <button class="rail-btn" data-action="power" type="button" aria-label="Nút nguồn" data-tip="Nút nguồn"><span data-icon="power"></span></button>
           <span class="rail-sep"></span>
-          <button class="icon-btn" data-action="rotate" type="button" title="Xoay màn hình" aria-label="Xoay màn hình"><span data-icon="rotate"></span></button>
-          <button class="icon-btn" data-action="notifications" type="button" title="Thông báo" aria-label="Mở thông báo"><span data-icon="bell"></span></button>
-          <button class="icon-btn" data-action="quickSettings" type="button" title="Cài đặt nhanh" aria-label="Cài đặt nhanh"><span data-icon="grid"></span></button>
-          <button class="icon-btn" data-action="screenPower" type="button" title="Tắt màn hình điện thoại (vẫn phản chiếu)" aria-label="Tắt/bật màn hình điện thoại"><span data-icon="screenOff"></span></button>
+          <button class="rail-btn" data-action="rotate" type="button" aria-label="Xoay màn hình" data-tip="Xoay màn hình"><span data-icon="rotate"></span></button>
+          <button class="rail-btn" data-action="notifications" type="button" aria-label="Mở thông báo" data-tip="Thông báo"><span data-icon="bell"></span></button>
+          <button class="rail-btn" data-action="quickSettings" type="button" aria-label="Cài đặt nhanh" data-tip="Cài đặt nhanh"><span data-icon="grid"></span></button>
+          <button class="rail-btn" data-action="screenPower" type="button" aria-label="Tắt/bật màn hình điện thoại" data-tip="Tắt màn hình điện thoại"><span data-icon="screenOff"></span></button>
           <span class="rail-sep"></span>
-          <button class="icon-btn" data-action="keyboard" type="button" title="Gõ phím" aria-label="Bàn phím"><span data-icon="keyboard"></span></button>
-          <button class="icon-btn" data-action="paste" type="button" title="Dán clipboard máy tính vào điện thoại" aria-label="Dán clipboard"><span data-icon="clipboard"></span></button>
+          <button class="rail-btn" data-action="keyboard" type="button" aria-label="Bàn phím" data-tip="Gõ phím"><span data-icon="keyboard"></span></button>
+          <button class="rail-btn" data-action="paste" type="button" aria-label="Dán clipboard" data-tip="Dán clipboard máy tính"><span data-icon="clipboard"></span></button>
         </nav>
       </div>
       <textarea id="v-keys" class="key-sink" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Nhập phím cho điện thoại"></textarea>
       <input type="file" id="v-file" multiple hidden />
     </div>
 
-    <dialog class="dialog" id="settings">
+    <!-- ================================================= dialogs -->
+    <dialog class="dialog glass" id="settings">
       <form method="dialog" id="settings-form">
         <header class="dialog-head">
+          <span class="app-icon app-icon--purple" data-icon="sliders"></span>
           <h2>Chất lượng & tùy chọn</h2>
           <button class="icon-btn" value="cancel" type="submit" aria-label="Đóng"><span data-icon="close"></span></button>
         </header>
-        <div class="fields">
-          <label class="field">
-            <span>Độ phân giải tối đa</span>
-            <select name="maxSize">
-              <option value="720">720 px</option>
-              <option value="1024">1024 px</option>
-              <option value="1280">1280 px (khuyên dùng)</option>
-              <option value="1600">1600 px</option>
-              <option value="1920">1920 px</option>
-              <option value="0">Gốc của máy</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Bitrate video</span>
-            <select name="videoBitRate">
-              <option value="2000000">2 Mbps (mạng chậm)</option>
-              <option value="4000000">4 Mbps</option>
-              <option value="8000000">8 Mbps (mặc định)</option>
-              <option value="12000000">12 Mbps</option>
-              <option value="16000000">16 Mbps</option>
-              <option value="24000000">24 Mbps</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Khung hình / giây</span>
-            <select name="maxFps">
-              <option value="30">30 fps</option>
-              <option value="60">60 fps</option>
-              <option value="90">90 fps</option>
-              <option value="120">120 fps</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>Nguồn âm thanh</span>
-            <select name="audioSource">
-              <option value="output">Âm thanh hệ thống (tắt loa máy)</option>
-              <option value="playback">Âm thanh hệ thống (vẫn phát trên máy)</option>
-              <option value="mic">Micro của điện thoại</option>
-            </select>
-          </label>
-        </div>
-        <div class="toggles">
-          <label class="toggle"><input type="checkbox" name="audio" /><span>Chuyển âm thanh <small>Android 11+</small></span></label>
-          <label class="toggle"><input type="checkbox" name="control" /><span>Cho phép điều khiển <small>tắt = chỉ xem</small></span></label>
-          <label class="toggle"><input type="checkbox" name="clipboardAutosync" /><span>Đồng bộ clipboard</span></label>
-          <label class="toggle"><input type="checkbox" name="stayAwake" /><span>Giữ màn hình sáng khi cắm sạc</span></label>
-          <label class="toggle"><input type="checkbox" name="turnScreenOff" /><span>Tắt màn hình điện thoại khi xem</span></label>
-          <label class="toggle"><input type="checkbox" name="showTouches" /><span>Hiện điểm chạm trên điện thoại</span></label>
-          <label class="toggle"><input type="checkbox" name="powerOffOnClose" /><span>Tắt màn hình khi đóng phiên</span></label>
-          <label class="toggle"><input type="checkbox" name="hardwareDecoding" /><span>Giải mã video bằng GPU <small>có thể trễ vài khung trên Windows</small></span></label>
+        <div class="dialog-body">
+          <div class="fields">
+            <label class="field">
+              <span>Độ phân giải tối đa</span>
+              <select name="maxSize">
+                <option value="720">720 px</option>
+                <option value="1024">1024 px</option>
+                <option value="1280">1280 px (khuyên dùng)</option>
+                <option value="1600">1600 px</option>
+                <option value="1920">1920 px</option>
+                <option value="0">Gốc của máy</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Bitrate video</span>
+              <select name="videoBitRate">
+                <option value="2000000">2 Mbps (mạng chậm)</option>
+                <option value="4000000">4 Mbps (Wi-Fi)</option>
+                <option value="8000000">8 Mbps (mặc định)</option>
+                <option value="12000000">12 Mbps</option>
+                <option value="16000000">16 Mbps</option>
+                <option value="24000000">24 Mbps</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Khung hình / giây</span>
+              <select name="maxFps">
+                <option value="30">30 fps</option>
+                <option value="60">60 fps</option>
+                <option value="90">90 fps</option>
+                <option value="120">120 fps</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Nguồn âm thanh</span>
+              <select name="audioSource">
+                <option value="output">Âm thanh hệ thống (tắt loa máy)</option>
+                <option value="playback">Âm thanh hệ thống (vẫn phát trên máy)</option>
+                <option value="mic">Micro của điện thoại</option>
+              </select>
+            </label>
+          </div>
+          <div class="toggles glass-inset">
+            <label class="toggle"><span>Chuyển âm thanh <small>Android 11+</small></span><input type="checkbox" class="switch" name="audio" /></label>
+            <label class="toggle"><span>Cho phép điều khiển <small>tắt = chỉ xem</small></span><input type="checkbox" class="switch" name="control" /></label>
+            <label class="toggle"><span>Đồng bộ clipboard</span><input type="checkbox" class="switch" name="clipboardAutosync" /></label>
+            <label class="toggle"><span>Giữ màn hình sáng khi cắm sạc</span><input type="checkbox" class="switch" name="stayAwake" /></label>
+            <label class="toggle"><span>Tắt màn hình điện thoại khi xem</span><input type="checkbox" class="switch" name="turnScreenOff" /></label>
+            <label class="toggle"><span>Hiện điểm chạm trên điện thoại</span><input type="checkbox" class="switch" name="showTouches" /></label>
+            <label class="toggle"><span>Tắt màn hình khi đóng phiên</span><input type="checkbox" class="switch" name="powerOffOnClose" /></label>
+            <label class="toggle"><span>Giải mã video bằng GPU <small>có thể trễ vài khung trên Windows</small></span><input type="checkbox" class="switch" name="hardwareDecoding" /></label>
+          </div>
         </div>
         <footer class="dialog-foot">
-          <button class="btn ghost" type="button" id="settings-reset">Mặc định</button>
+          <button class="btn" type="button" id="settings-reset">Mặc định</button>
           <button class="btn primary" value="save" type="submit">Lưu</button>
         </footer>
       </form>
     </dialog>
 
-    <dialog class="dialog" id="pair-dialog">
+    <dialog class="dialog glass" id="pair-dialog">
       <form id="pair-form" autocomplete="off" novalidate>
         <header class="dialog-head">
+          <span class="app-icon app-icon--green" data-icon="wifi"></span>
           <h2>Ghép đôi Gỡ lỗi không dây</h2>
           <button class="icon-btn" type="button" id="pair-x" aria-label="Đóng"><span data-icon="close"></span></button>
         </header>
@@ -262,7 +371,7 @@
           <p class="error" id="pair-error" hidden></p>
         </div>
         <footer class="dialog-foot">
-          <button class="btn ghost" type="button" id="pair-cancel">Hủy</button>
+          <button class="btn" type="button" id="pair-cancel">Hủy</button>
           <button class="btn primary" type="submit" id="pair-submit"><span data-icon="link"></span><span>Ghép đôi</span></button>
         </footer>
       </form>

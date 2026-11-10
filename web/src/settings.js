@@ -51,5 +51,11 @@ export function setupSettings({ dialog, form, openButton, resetButton, onChange 
     get options() {
       return current;
     },
+    /** Quick changes from outside the dialog (e.g. the sidebar audio switch). */
+    update(patch) {
+      current = normalizeOptions({ ...current, ...patch });
+      saveOptions(current);
+      onChange?.(current);
+    },
   };
 }
