@@ -237,16 +237,20 @@ async function setupUsb() {
   }
 
   const usb = await import('./transport/webusb.js');
-  const devices = new Map();
+  // Wrappers are kept even while a phone is briefly gone (USB re-enumeration),
+  // so an open viewer keeps a wrapper that gets the fresh USBDevice.
+  const known = new Map();
+  const devices = new Map(); // currently present
 
   const render = async () => {
     const list = await usb.listUsbDevices().catch(() => []);
-    const seen = new Set();
+    devices.clear();
     for (const raw of list) {
-      seen.add(raw.serial);
-      if (!devices.has(raw.serial)) devices.set(raw.serial, new usb.UsbDevice(raw));
+      let d = known.get(raw.serial);
+      if (!d) known.set(raw.serial, (d = new usb.UsbDevice(raw)));
+      else if (d.device.raw !== raw.raw) d.update(raw);
+      devices.set(raw.serial, d);
     }
-    for (const serial of devices.keys()) if (!seen.has(serial)) devices.delete(serial);
     grid.replaceChildren();
     panel.querySelector('.empty')?.remove();
     if (!devices.size) {
@@ -283,6 +287,7 @@ async function setupUsb() {
   });
   navigator.usb.addEventListener('connect', render);
   navigator.usb.addEventListener('disconnect', render);
+  window.addEventListener('viewer:closed', render); // show the "Ngắt" button once connected
   await render();
 }
 setupUsb().catch((err) => console.error(err));

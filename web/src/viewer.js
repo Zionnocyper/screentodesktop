@@ -212,6 +212,7 @@ export function closeViewer() {
     historyPushed = false;
     history.back();
   }
+  window.dispatchEvent(new Event('viewer:closed'));
 }
 
 /** Must be called from a user gesture (audio needs one). */

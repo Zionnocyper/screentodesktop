@@ -97,32 +97,77 @@ export class UsbDevice {
     return adbConnections.has(this.serial);
   }
 
+  /** Called when the browser reports a (re)connected USB device with this serial. */
+  update(device) {
+    this.device = device;
+  }
+
+  async #connectOnce(onStatus) {
+    onStatus('Đang mở thiết bị USB…');
+    let connection;
+    try {
+      connection = await this.device.connect();
+    } catch (err) {
+      if (err instanceof AdbDaemonWebUsbDevice.DeviceBusyError) {
+        throw Object.assign(
+          new Error('Thiết bị đang bị chương trình khác giữ (thường là adb). Chạy "adb kill-server" rồi thử lại.'),
+          { permanent: true },
+        );
+      }
+      throw err;
+    }
+    onStatus('Đang xác thực ADB… Hãy bấm "Cho phép" trên điện thoại nếu được hỏi.');
+    const transport = await AdbDaemonTransport.authenticate({
+      serial: this.serial,
+      connection,
+      credentialStore,
+    });
+    return new Adb(transport);
+  }
+
+  /** Waits for the browser to report this phone again after it re-enumerated. */
+  async #waitForReconnect(previousRaw, timeoutMs = 8000) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const list = await usbManager.getDevices().catch(() => []);
+      const fresh = list.find((d) => d.serial === this.serial && d.raw !== previousRaw);
+      if (fresh) return fresh;
+      await sleep(250);
+    }
+    return null;
+  }
+
   async adb(onStatus = () => {}) {
     let promise = adbConnections.get(this.serial);
     if (!promise) {
       promise = (async () => {
-        onStatus('Đang mở thiết bị USB…');
-        let connection;
-        try {
-          connection = await this.device.connect();
-        } catch (err) {
-          if (err instanceof AdbDaemonWebUsbDevice.DeviceBusyError) {
-            throw new Error('Thiết bị đang bị chương trình khác giữ (thường là adb). Chạy "adb kill-server" rồi thử lại.');
+        // Some phones (seen on vivo) drop and re-enumerate the USB connection
+        // when a new ADB host connects, or after the page was reloaded during
+        // a session. Wait for the phone to come back and try again.
+        for (let attempt = 1; ; attempt++) {
+          try {
+            return await this.#connectOnce(onStatus);
+          } catch (err) {
+            const transient = !err.permanent && /disconnected|closed unexpectedly|NetworkError|transfer/i.test(String(err?.message ?? err));
+            if (!transient || attempt >= 3) throw err;
+            onStatus('Điện thoại vừa kết nối lại cổng USB, đang thử lại…');
+            const previousRaw = this.device.raw;
+            await previousRaw.close().catch(() => {});
+            const fresh = await this.#waitForReconnect(previousRaw);
+            if (fresh) this.device = fresh;
+            await sleep(300);
           }
-          throw err;
         }
-        onStatus('Đang xác thực ADB… Hãy bấm "Cho phép" trên điện thoại nếu được hỏi.');
-        const transport = await AdbDaemonTransport.authenticate({
-          serial: this.serial,
-          connection,
-          credentialStore,
+      })().then((adb) => {
+        adb.disconnected.then(() => {
+          if (adbConnections.get(this.serial) === promise) adbConnections.delete(this.serial);
         });
-        const adb = new Adb(transport);
-        adb.disconnected.then(() => adbConnections.delete(this.serial));
         return adb;
-      })();
+      });
       adbConnections.set(this.serial, promise);
-      promise.catch(() => adbConnections.delete(this.serial));
+      promise.catch(() => {
+        if (adbConnections.get(this.serial) === promise) adbConnections.delete(this.serial);
+      });
     }
     return promise;
   }
