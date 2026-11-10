@@ -1191,6 +1191,292 @@ kbd {
 .guide .panel-title {
   margin-bottom: 14px;
 }
+
+/* ------------------------------------------------------------ Wi-Fi guide */
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+.panel {
+  scroll-margin-top: 16px;
+}
+a {
+  color: inherit;
+}
+.home a:not(.btn) {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.home a:not(.btn):hover {
+  text-decoration: underline;
+}
+a.btn {
+  text-decoration: none;
+}
+code {
+  font: 600 12.5px/1.5 var(--mono);
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  white-space: nowrap;
+}
+.hero-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+.pill--state {
+  border: 1px solid var(--glass-border);
+  background: var(--glass-inset);
+  color: var(--muted);
+}
+.pill--state:empty {
+  display: none;
+}
+.pill--state::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.pill--state.ok {
+  color: #15803d;
+  background: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.35);
+}
+.pill--state.warn {
+  color: #b45309;
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+.wg-chev .icon {
+  transform: rotate(90deg);
+  transition: transform 0.25s;
+}
+.wifi-guide.collapsed .wg-chev .icon {
+  transform: rotate(-90deg);
+}
+.wifi-guide.collapsed #wg-body {
+  display: none;
+}
+
+.stepper {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  position: relative;
+}
+.step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  background: var(--glass-inset);
+  border: 1px solid var(--glass-border);
+  transition: background 0.25s, box-shadow 0.25s;
+}
+.step:not(:last-child)::after {
+  /* thin connector between step numbers */
+  content: '';
+  position: absolute;
+  left: 34px;
+  top: 58px;
+  bottom: -12px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--glass-border);
+}
+.step.done:not(:last-child)::after {
+  background: linear-gradient(#22c55e, rgba(34, 197, 94, 0.25));
+}
+.step.current {
+  background: var(--glass-hover);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), var(--shadow-sm);
+}
+.step-num {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  font-weight: 750;
+  color: var(--muted);
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+}
+.step.current .step-num {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(160deg, var(--accent-2), var(--accent));
+  box-shadow: 0 6px 14px -6px var(--accent);
+}
+.step.done .step-num {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(160deg, #5fe08a, #1fb456);
+  box-shadow: 0 6px 14px -6px #1fb456;
+}
+.step-num .icon {
+  width: 20px;
+  height: 20px;
+  stroke-width: 2.6;
+}
+.step-body {
+  min-width: 0;
+}
+.step h3 {
+  margin: 7px 0 6px;
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+.step h3 small {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--faint);
+}
+.step p {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 14.5px;
+}
+.step.done:not(.current):not(#wg-step-view) p:not(.step-live),
+.step.done:not(.current):not(#wg-step-view) .step-actions,
+.step.done:not(.current) .code,
+.step.done:not(.current) .path {
+  /* finished steps fold down to their title and live status;
+     the last step keeps its "Xem" buttons */
+  display: none;
+}
+#wg-step-view.done {
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.45), var(--shadow-sm);
+}
+.step-note {
+  font-size: 13.5px !important;
+}
+.step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.step-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 0 !important;
+  font-size: 13.5px !important;
+  font-weight: 650;
+  color: #15803d !important;
+}
+.step-live:empty {
+  display: none;
+}
+.step-live.warn {
+  color: #b45309 !important;
+}
+.step-live.wait {
+  color: var(--muted) !important;
+}
+.step-live .icon {
+  width: 16px;
+  height: 16px;
+}
+.step-live.wait::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--glass-border);
+  border-top-color: var(--accent);
+  animation: spin 0.9s linear infinite;
+}
+@media (prefers-color-scheme: dark) {
+  .step-live,
+  .pill--state.ok {
+    color: #4ade80 !important;
+  }
+  .step-live.warn,
+  .pill--state.warn {
+    color: #fbbf24 !important;
+  }
+}
+.code {
+  position: relative;
+  margin: 6px 0 10px;
+  border-radius: 14px;
+}
+.code pre {
+  margin: 0;
+  padding: 12px 48px 12px 14px;
+  overflow-x: auto;
+  font: 13px/1.7 var(--mono);
+  color: var(--text);
+}
+.copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+}
+.path {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 10px;
+}
+.path span {
+  padding: 4px 11px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 650;
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+}
+.path span:last-child {
+  color: #fff;
+  border-color: transparent;
+  background: linear-gradient(160deg, var(--accent-2), var(--accent));
+}
+.path i {
+  font-style: normal;
+  color: var(--faint);
+}
+.tips {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+.tip {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
+}
+.tip p {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.tip b {
+  color: var(--text);
+}
 .steps {
   margin: 0;
   padding-left: 20px;

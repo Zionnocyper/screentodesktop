@@ -145,6 +145,8 @@ Thư mục `dist/` sau khi `npm run build` là một website tĩnh hoàn chỉnh
 
 ## Không dây qua Wi-Fi (chế độ server)
 
+Trên trang web có mục **Kết nối không dây qua Wi-Fi** (nút *Hướng dẫn kết nối Wi-Fi* ở đầu trang hoặc *Hướng dẫn Wi-Fi* trên thanh bên): hướng dẫn từng bước, tự đánh dấu ✓ theo trạng thái thật (đã có server chưa, đã thấy điện thoại trong mạng chưa, đã kết nối chưa) và có sẵn nút tải phần mềm, sao chép lệnh, ghép đôi, xem.
+
 Bluetooth không dùng được (ADB không hỗ trợ, băng thông quá thấp). Wi-Fi có 3 cách, cáp USB vẫn dùng song song bình thường:
 
 **1. Ghép đôi Gỡ lỗi không dây — không cần cáp (Android 11+, khuyên dùng)**

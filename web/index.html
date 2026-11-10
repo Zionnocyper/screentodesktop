@@ -46,7 +46,7 @@
             <span class="app-icon app-icon--blue" data-icon="usb"></span>
             <span class="sb-text">Thêm thiết bị USB</span>
           </button>
-          <button class="sb-item" type="button" id="sb-pair" data-tip="Ghép đôi Wi-Fi" hidden>
+          <button class="sb-item" type="button" id="sb-pair" data-tip="Ghép đôi Wi-Fi">
             <span class="app-icon app-icon--green" data-icon="wifi"></span>
             <span class="sb-text">Ghép đôi Wi-Fi</span>
             <span class="badge-count badge-count--red" id="sb-pair-count" hidden></span>
@@ -62,9 +62,13 @@
             <span class="sb-text">Chất lượng</span>
             <span class="badge-count" id="sb-quality"></span>
           </button>
-          <button class="sb-item" type="button" id="sb-guide" data-tip="Hướng dẫn">
+          <button class="sb-item" type="button" id="sb-wifi-guide" data-tip="Hướng dẫn Wi-Fi">
+            <span class="app-icon app-icon--green" data-icon="book"></span>
+            <span class="sb-text">Hướng dẫn Wi-Fi</span>
+          </button>
+          <button class="sb-item" type="button" id="sb-guide" data-tip="Bắt đầu nhanh">
             <span class="app-icon app-icon--orange" data-icon="book"></span>
-            <span class="sb-text">Hướng dẫn</span>
+            <span class="sb-text">Bắt đầu nhanh</span>
           </button>
         </nav>
 
@@ -118,6 +122,10 @@
             Xem và điều khiển bằng chuột, bàn phím; có âm thanh, clipboard, kéo-thả file và cài APK. Kết nối bằng cáp USB
             hoặc không dây qua Wi-Fi; chạy local hay trên máy chủ riêng.
           </p>
+          <div class="hero-cta">
+            <a class="btn" href="#wifi-guide" id="hero-wifi"><span data-icon="wifi"></span><span>Hướng dẫn kết nối Wi-Fi</span></a>
+            <a class="btn" href="#guide"><span data-icon="usb"></span><span>Kết nối bằng cáp USB</span></a>
+          </div>
           <div id="warnings" class="warnings"></div>
         </section>
 
@@ -177,6 +185,131 @@
           </div>
         </section>
 
+        <section class="panel glass wifi-guide" id="wifi-guide">
+          <div class="panel-head">
+            <div class="panel-title">
+              <span class="app-icon app-icon--green app-icon--lg" data-icon="wifi"></span>
+              <div>
+                <h2>Kết nối không dây qua Wi-Fi</h2>
+                <p class="muted">Không cần cáp · Android 11 trở lên · làm theo các bước dưới, chỉ cần một lần</p>
+              </div>
+            </div>
+            <div class="panel-actions">
+              <span class="pill pill--state" id="wg-status"></span>
+              <button class="btn" type="button" id="wg-toggle" aria-expanded="true" aria-controls="wg-body">
+                <span data-icon="chevronLeft" class="wg-chev"></span><span>Thu gọn</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="wg-body">
+            <ol class="stepper">
+              <li class="step" id="wg-step-install">
+                <span class="step-num">1</span>
+                <div class="step-body">
+                  <h3>Cài Node.js và Android Platform-Tools <small>một lần</small></h3>
+                  <p>
+                    Wi-Fi cần một server nhỏ chạy trên máy tính cùng mạng với điện thoại (trình duyệt không tự nối mạng tới
+                    điện thoại được). Cài 2 phần mềm miễn phí sau:
+                  </p>
+                  <div class="step-actions">
+                    <a class="btn" href="https://nodejs.org/" target="_blank" rel="noopener"><span data-icon="download"></span><span>Tải Node.js (LTS)</span></a>
+                    <a class="btn" href="https://developer.android.com/tools/releases/platform-tools" target="_blank" rel="noopener"><span data-icon="download"></span><span>Tải Platform-Tools</span></a>
+                  </div>
+                  <p class="step-note">
+                    Giải nén Platform-Tools vào thư mục dự án để có <code>screentodesktop/platform-tools/adb.exe</code> (macOS/Linux:
+                    <code>adb</code>) — server tự tìm thấy adb.
+                  </p>
+                  <p class="step-live" id="wg-live-install"></p>
+                </div>
+              </li>
+
+              <li class="step" id="wg-step-server">
+                <span class="step-num">2</span>
+                <div class="step-body">
+                  <h3>Chạy server trên máy tính</h3>
+                  <p>Mở Terminal / PowerShell và chạy (lần sau chỉ cần lệnh cuối <code>npm start</code>):</p>
+                  <div class="code glass-inset">
+                    <pre id="wg-commands">git clone https://github.com/Zionnocyper/screentodesktop.git
+cd screentodesktop
+npm install
+npm run build
+npm start</pre>
+                    <button class="icon-btn icon-btn--sm copy-btn" type="button" data-copy="wg-commands" aria-label="Sao chép lệnh"><span data-icon="copy"></span></button>
+                  </div>
+                  <p>
+                    Rồi mở <b>http://localhost:8000</b>. Nếu Windows hỏi <i>“Allow adb to communicate…”</i>, chọn <b>Cho phép</b>
+                    (mạng riêng tư) để tự tìm được điện thoại.
+                  </p>
+                  <div class="step-actions" id="wg-open-local" hidden>
+                    <a class="btn" href="http://localhost:8000/" target="_blank" rel="noopener"><span data-icon="external"></span><span>Mở localhost:8000</span></a>
+                  </div>
+                  <p class="step-live" id="wg-live-server"></p>
+                </div>
+              </li>
+
+              <li class="step" id="wg-step-phone">
+                <span class="step-num">3</span>
+                <div class="step-body">
+                  <h3>Bật Gỡ lỗi không dây trên điện thoại</h3>
+                  <p>Điện thoại và máy tính phải nối vào <b>cùng một router</b> (không dùng Wi-Fi khách hay 4G). Trên điện thoại vào:</p>
+                  <div class="path">
+                    <span>Cài đặt</span><i>›</i><span>Tùy chọn nhà phát triển</span><i>›</i><span>Gỡ lỗi không dây</span><i>›</i><span>Bật</span><i>›</i><span>Ghép nối thiết bị bằng mã ghép nối</span>
+                  </div>
+                  <p class="step-note">Điện thoại sẽ hiện <b>mã 6 số</b> và <b>địa chỉ IP:cổng</b> — giữ màn hình đó mở.</p>
+                  <p class="step-live" id="wg-live-phone"></p>
+                </div>
+              </li>
+
+              <li class="step" id="wg-step-pair">
+                <span class="step-num">4</span>
+                <div class="step-body">
+                  <h3>Ghép đôi bằng mã 6 số</h3>
+                  <p>
+                    Điện thoại tự hiện ở mục <b>Tìm thấy trong mạng</b> → bấm <b>Ghép đôi</b> → nhập mã. Không thấy máy? Bấm nút dưới
+                    đây và gõ địa chỉ IP:cổng đang hiện trên điện thoại.
+                  </p>
+                  <div class="step-actions">
+                    <button class="btn primary" type="button" id="wg-pair"><span data-icon="link"></span><span>Ghép đôi Wi-Fi</span></button>
+                  </div>
+                  <p class="step-live" id="wg-live-pair"></p>
+                </div>
+              </li>
+
+              <li class="step" id="wg-step-view">
+                <span class="step-num">5</span>
+                <div class="step-body">
+                  <h3>Bấm Xem</h3>
+                  <p>
+                    Điện thoại hiện trong danh sách với biểu tượng Wi-Fi xanh. Những lần sau chỉ cần chạy server và bật
+                    <i>Gỡ lỗi không dây</i> — máy tự kết nối lại, không phải ghép đôi nữa.
+                  </p>
+                  <div class="step-actions" id="wg-view-actions"></div>
+                </div>
+              </li>
+            </ol>
+
+            <div class="tips">
+              <div class="tip glass-inset">
+                <span class="app-icon app-icon--blue" data-icon="usb"></span>
+                <p><b>Đang cắm cáp vào server?</b> Bấm nút <b>Wi-Fi</b> trên thẻ thiết bị rồi rút cáp — không cần ghép đôi (mất tác dụng khi điện thoại khởi động lại).</p>
+              </div>
+              <div class="tip glass-inset">
+                <span class="app-icon app-icon--purple" data-icon="sliders"></span>
+                <p><b>Hình giật?</b> Vào <b>Chất lượng</b>, chọn bitrate <b>4 Mbps (Wi-Fi)</b> và độ phân giải 1024 px.</p>
+              </div>
+              <div class="tip glass-inset">
+                <span class="app-icon app-icon--orange" data-icon="alert"></span>
+                <p><b>Không thấy điện thoại?</b> Kiểm tra cùng router, đã cho phép adb qua tường lửa, router không bật <i>cách ly thiết bị (AP isolation)</i>.</p>
+              </div>
+              <div class="tip glass-inset">
+                <span class="app-icon app-icon--teal" data-icon="monitor"></span>
+                <p><b>Xem từ máy khác trong nhà?</b> Chạy server với <code>HOST=0.0.0.0</code> và <code>ACCESS_PASSWORD=…</code>, rồi mở <code>http://IP-máy-tính:8000</code>.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="panel glass guide" id="guide">
           <div class="panel-title">
             <span class="app-icon app-icon--orange app-icon--lg" data-icon="book"></span>
@@ -189,7 +322,7 @@
             </li>
             <li>
               Cắm cáp USB. Chọn <b>Thêm thiết bị USB</b> (WebUSB) hoặc dùng danh sách <b>Thiết bị trên server</b>.
-              Không muốn dùng cáp (Android 11+): bật <i>Gỡ lỗi không dây</i> và bấm <b>Ghép đôi Wi-Fi</b>.
+              Không muốn dùng cáp (Android 11+): xem <a href="#wifi-guide">Hướng dẫn Wi-Fi</a>.
             </li>
             <li>Chấp nhận hộp thoại <i>“Cho phép gỡ lỗi USB?”</i> trên điện thoại, rồi bấm <b>Xem</b>.</li>
           </ol>

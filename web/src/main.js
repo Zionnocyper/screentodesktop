@@ -242,7 +242,11 @@ $('sb-connect').addEventListener('click', () => {
 });
 $('sb-pair').addEventListener('click', () => {
   closeDrawer();
-  openPair();
+  pairOrGuide();
+});
+$('sb-wifi-guide').addEventListener('click', () => {
+  closeDrawer();
+  showWifiGuide();
 });
 $('sb-usb').addEventListener('click', () => {
   closeDrawer();
@@ -273,6 +277,137 @@ window.addEventListener('viewer:stats', (e) => {
 $('sb-session-open').addEventListener('click', () => restoreViewer());
 $('sb-session-stop').addEventListener('click', () => closeViewer());
 
+// ------------------------------------------------------------ Wi-Fi guide (live stepper)
+let serverMode = null; // null = unknown, false = static hosting (no Node server), true = server
+let serverAuthed = false;
+const WG_COLLAPSED_KEY = 'screentodesktop.wifiGuide.collapsed';
+
+function setGuideCollapsed(collapsed) {
+  $('wifi-guide').classList.toggle('collapsed', collapsed);
+  $('wg-toggle').setAttribute('aria-expanded', String(!collapsed));
+  $('wg-toggle').querySelector('span:last-child').textContent = collapsed ? 'Mở hướng dẫn' : 'Thu gọn';
+  try {
+    localStorage.setItem(WG_COLLAPSED_KEY, collapsed ? '1' : '0');
+  } catch {}
+}
+try {
+  if (localStorage.getItem(WG_COLLAPSED_KEY) === '1') setGuideCollapsed(true);
+} catch {}
+$('wg-toggle').addEventListener('click', () => setGuideCollapsed(!$('wifi-guide').classList.contains('collapsed')));
+
+function showWifiGuide() {
+  setGuideCollapsed(false);
+  const current = document.querySelector('#wifi-guide .step.current') ?? $('wifi-guide');
+  current.scrollIntoView({ behavior: 'smooth', block: current.id === 'wifi-guide' ? 'start' : 'center' });
+}
+$('hero-wifi').addEventListener('click', (e) => {
+  e.preventDefault();
+  showWifiGuide();
+});
+
+/** Opens the pairing dialog when a server is available, otherwise explains what is missing. */
+function pairOrGuide() {
+  if (serverMode && serverAuthed) return openPair();
+  showWifiGuide();
+  toast(
+    serverMode ? 'Đăng nhập server trước (khu “Thiết bị trên server”).' : 'Wi-Fi cần chạy server trên máy tính — làm theo bước 1 và 2.',
+    { type: 'error', timeout: 5000 },
+  );
+}
+$('wg-pair').addEventListener('click', pairOrGuide);
+
+for (const btn of document.querySelectorAll('[data-copy]')) {
+  btn.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText($(btn.dataset.copy).textContent);
+      toast('Đã sao chép lệnh', { type: 'ok', timeout: 1600 });
+    } catch {
+      toast('Không sao chép được — hãy bôi đen và sao chép thủ công.', { type: 'error' });
+    }
+  });
+}
+
+function live(id, text, kind = 'ok') {
+  const el = $(id);
+  el.className = `step-live${kind === 'ok' ? '' : ` ${kind}`}`;
+  el.replaceChildren();
+  if (!text) return;
+  if (kind === 'ok') el.insertAdjacentHTML('afterbegin', icon('check'));
+  el.append(text);
+}
+
+function renderWifiGuide() {
+  const wireless = [...serverDevices.values()].filter((d) => d.info?.wireless && d.state === 'device');
+  const discovered = serverData.discovered ?? [];
+  const waiting = discovered.filter((s) => s.type === 'pairing' && !s.connected);
+  const advertising = discovered.filter((s) => s.type === 'connect' && !s.connected);
+  const names = (list) => [...new Set(list.map(discoveredName))].join(', ');
+
+  const done = {
+    install: serverMode === true,
+    server: serverMode === true,
+    phone: wireless.length > 0 || waiting.length > 0 || advertising.length > 0,
+    pair: wireless.length > 0,
+    view: wireless.length > 0,
+  };
+
+  // 1 + 2: is there a Node server behind this page?
+  if (serverMode === true) {
+    live('wg-live-install', 'Đã cài — server đang chạy');
+    live('wg-live-server', `Server đang chạy tại ${location.host}${serverAuthed ? '' : ' (cần đăng nhập)'}`);
+  } else if (serverMode === false) {
+    live('wg-live-install', '');
+    live('wg-live-server', 'Trang này là bản web tĩnh, chưa có server. Chạy server rồi mở http://localhost:8000.', 'warn');
+  } else {
+    live('wg-live-install', '');
+    live('wg-live-server', 'Đang kiểm tra server…', 'wait');
+  }
+  $('wg-open-local').hidden = serverMode !== false;
+
+  // 3: does the server see the phone on the LAN?
+  if (wireless.length) live('wg-live-phone', `Đã kết nối: ${wireless.map((d) => d.name).join(', ')}`);
+  else if (waiting.length) live('wg-live-phone', `Đã thấy ${names(waiting)} đang chờ ghép đôi`);
+  else if (advertising.length) live('wg-live-phone', `Đã thấy ${names(advertising)} đang bật Gỡ lỗi không dây`);
+  else if (serverMode && serverAuthed && serverData.mdns === false) {
+    live('wg-live-phone', 'adb trên server không bật mDNS nên không tự tìm được điện thoại — nhập IP:cổng ở bước 4.', 'warn');
+  } else if (serverMode && serverAuthed) live('wg-live-phone', 'Đang tìm điện thoại trong mạng…', 'wait');
+  else live('wg-live-phone', '');
+
+  // 4: pairing
+  if (wireless.length) live('wg-live-pair', 'Đã ghép đôi và kết nối');
+  else if (!serverMode) live('wg-live-pair', 'Cần chạy server (bước 2) để ghép đôi.', 'warn');
+  else if (!serverAuthed) live('wg-live-pair', 'Đăng nhập server trước.', 'warn');
+  else if (waiting.length) live('wg-live-pair', `Bấm “Ghép đôi” cho ${names(waiting)} rồi nhập mã 6 số.`, 'wait');
+  else live('wg-live-pair', '');
+
+  // 5: view
+  $('wg-view-actions').replaceChildren(
+    ...wireless.map((d) => iconButton('play', `Xem ${d.name}`, { class: 'btn primary', onclick: () => view(d) })),
+  );
+
+  // step markers: done = check, first unfinished = current
+  const order = ['install', 'server', 'phone', 'pair', 'view'];
+  const current = order.find((k) => !done[k]);
+  order.forEach((k, i) => {
+    const li = $(`wg-step-${k}`);
+    li.classList.toggle('done', done[k]);
+    li.classList.toggle('current', k === current);
+    li.querySelector('.step-num').innerHTML = done[k] ? icon('check') : String(i + 1);
+  });
+
+  const status = $('wg-status');
+  if (wireless.length) {
+    status.className = 'pill pill--state ok';
+    status.textContent = 'Đã kết nối Wi-Fi';
+  } else if (serverMode === false) {
+    status.className = 'pill pill--state warn';
+    status.textContent = 'Cần chạy server';
+  } else if (serverMode) {
+    status.className = 'pill pill--state';
+    status.textContent = `Bước ${order.indexOf(current) + 1}/5`;
+  } else status.textContent = '';
+}
+
 // ------------------------------------------------------------ server devices
 const serverDevices = new Map();
 let stopWatching = null;
@@ -291,7 +426,7 @@ function renderServer(data) {
   }
   for (const serial of serverDevices.keys()) if (!seen.has(serial)) serverDevices.delete(serial);
 
-  $('sb-pair').hidden = false;
+  serverAuthed = true;
   $('sb-connect').hidden = false;
   if (error) setStatus('warn', 'adb chưa sẵn sàng', error);
   else setStatus('ok', 'Server đang chạy', `${location.host} · ${serverDevices.size} thiết bị`);
@@ -301,6 +436,7 @@ function renderServer(data) {
   renderDiscovered();
   renderPairDetected();
   renderSidebar();
+  renderWifiGuide();
   if (error) {
     grid.after(h('div', { class: 'empty' }, `Không kết nối được adb trên server: ${error}`));
     return;
@@ -498,10 +634,11 @@ function showLogin() {
   $('panel-server').querySelector('.empty')?.remove();
   $('server-login').hidden = false;
   $('server-actions').hidden = true;
-  $('sb-pair').hidden = true;
   $('sb-connect').hidden = true;
+  serverAuthed = false;
   setStatus('warn', 'Cần đăng nhập', location.host);
   renderSidebar();
+  renderWifiGuide();
   $('login-password').focus();
 }
 
@@ -539,10 +676,15 @@ $('form-connect').addEventListener('submit', async (e) => {
 getServerSession().then((session) => {
   if (!session) {
     // static hosting: WebUSB only
+    serverMode = false;
+    renderWifiGuide();
     const usbOk = 'usb' in navigator && window.isSecureContext;
     setStatus(usbOk ? 'ok' : 'warn', 'Chế độ WebUSB', usbOk ? 'Không có server · cắm cáp vào máy này' : 'Trình duyệt không hỗ trợ WebUSB');
     return;
   }
+  serverMode = true;
+  serverAuthed = !session.authRequired || session.authenticated;
+  renderWifiGuide();
   $('panel-server').hidden = false;
   if (session.authRequired) $('btn-logout').hidden = !session.authenticated;
   if (session.authRequired && !session.authenticated) showLogin();
@@ -624,3 +766,4 @@ async function setupUsb() {
 }
 setupUsb().catch((err) => console.error(err));
 renderSidebar();
+renderWifiGuide();
