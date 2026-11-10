@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>ScreenToDesktop</title>
+    <meta name="description" content="Phản chiếu và điều khiển điện thoại Android ngay trên trình duyệt." />
+    <meta name="theme-color" content="#0b0e14" />
+    <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" data-icon="monitor"></span>
+        <span class="brand-name">Screen<b>ToDesktop</b></span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn ghost" id="btn-settings" type="button">
+          <span data-icon="sliders"></span><span class="hide-sm">Chất lượng</span>
+        </button>
+        <button class="btn ghost" id="btn-logout" type="button" hidden>
+          <span data-icon="logout"></span><span class="hide-sm">Đăng xuất</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="home">
+      <section class="hero">
+        <h1>Màn hình điện thoại Android, ngay trên trình duyệt</h1>
+        <p class="lead">
+          Xem và điều khiển bằng chuột, bàn phím; có âm thanh, clipboard, kéo-thả file và cài APK. Chạy local hoặc
+          trên máy chủ riêng.
+        </p>
+        <div id="warnings" class="warnings"></div>
+      </section>
+
+      <section class="panel" id="panel-usb">
+        <div class="panel-head">
+          <div class="panel-title">
+            <span class="panel-icon" data-icon="usb"></span>
+            <div>
+              <h2>USB trên máy này</h2>
+              <p class="muted">Trình duyệt kết nối thẳng tới điện thoại qua WebUSB — không cần cài gì thêm.</p>
+            </div>
+          </div>
+          <button class="btn primary" id="btn-usb-add" type="button">
+            <span data-icon="plus"></span><span>Thêm thiết bị USB</span>
+          </button>
+        </div>
+        <div class="device-grid" id="usb-devices"></div>
+      </section>
+
+      <section class="panel" id="panel-server" hidden>
+        <div class="panel-head">
+          <div class="panel-title">
+            <span class="panel-icon" data-icon="server"></span>
+            <div>
+              <h2>Thiết bị trên server</h2>
+              <p class="muted" id="server-sub">Điện thoại cắm vào máy chạy server, hoặc kết nối qua ADB Wi-Fi.</p>
+            </div>
+          </div>
+          <form class="inline-form" id="form-connect" autocomplete="off">
+            <input id="connect-address" name="address" placeholder="192.168.1.10:5555" aria-label="Địa chỉ ADB Wi-Fi" />
+            <button class="btn" type="submit"><span data-icon="wifi"></span><span>Kết nối</span></button>
+          </form>
+        </div>
+        <form class="login" id="server-login" hidden autocomplete="on">
+          <p>Server này yêu cầu mật khẩu.</p>
+          <div class="inline-form">
+            <input type="password" id="login-password" name="password" placeholder="Mật khẩu" autocomplete="current-password" required />
+            <button class="btn primary" type="submit">Đăng nhập</button>
+          </div>
+          <p class="error" id="login-error" hidden></p>
+        </form>
+        <div class="device-grid" id="server-devices"></div>
+      </section>
+
+      <section class="panel guide">
+        <h2>Bắt đầu nhanh</h2>
+        <ol class="steps">
+          <li>
+            <b>Bật Gỡ lỗi USB</b> trên điện thoại: Cài đặt → Thông tin điện thoại → chạm 7 lần vào <i>Số hiệu bản tạo</i>,
+            rồi vào Tùy chọn nhà phát triển → bật <i>Gỡ lỗi USB</i>.
+          </li>
+          <li>
+            Cắm cáp USB. Chọn <b>Thêm thiết bị USB</b> (WebUSB) hoặc dùng danh sách <b>Thiết bị trên server</b>.
+          </li>
+          <li>Chấp nhận hộp thoại <i>“Cho phép gỡ lỗi USB?”</i> trên điện thoại, rồi bấm <b>Xem</b>.</li>
+        </ol>
+        <div class="shortcuts">
+          <div><kbd>Chuột trái</kbd> chạm / vuốt</div>
+          <div><kbd>Chuột phải</kbd> Quay lại (bật màn hình)</div>
+          <div><kbd>Chuột giữa</kbd> Màn hình chính</div>
+          <div><kbd>Ctrl</kbd> + kéo — thu phóng 2 ngón</div>
+          <div><kbd>Ctrl</kbd>+<kbd>V</kbd> dán vào điện thoại</div>
+          <div>Kéo-thả file vào màn hình để gửi / cài APK</div>
+        </div>
+      </section>
+
+      <footer class="footer muted">Dựa trên scrcpy-server <span id="scrcpy-version"></span> · WebCodecs · WebUSB</footer>
+    </main>
+
+    <div class="viewer" id="viewer" hidden>
+      <div class="viewer-bar">
+        <button class="icon-btn" id="v-close" type="button" title="Đóng" aria-label="Đóng"><span data-icon="close"></span></button>
+        <div class="viewer-title">
+          <b id="v-name"></b>
+          <span id="v-stats"></span>
+        </div>
+        <div class="viewer-actions">
+          <button class="icon-btn" id="v-audio" type="button" title="Âm thanh" aria-label="Bật/tắt âm thanh" hidden></button>
+          <button class="icon-btn" data-action="screenshot" type="button" title="Chụp màn hình" aria-label="Chụp màn hình"><span data-icon="camera"></span></button>
+          <button class="icon-btn" data-action="upload" type="button" title="Gửi file / cài APK" aria-label="Gửi file"><span data-icon="upload"></span></button>
+          <button class="icon-btn" data-action="fullscreen" type="button" title="Toàn màn hình" aria-label="Toàn màn hình"><span data-icon="maximize"></span></button>
+        </div>
+      </div>
+      <div class="viewer-body">
+        <div class="stage" id="v-stage">
+          <canvas id="v-canvas"></canvas>
+          <div class="stage-overlay" id="v-overlay">
+            <div class="spinner" id="v-spinner"></div>
+            <p id="v-status"></p>
+            <pre id="v-log" hidden></pre>
+            <div class="overlay-actions" id="v-overlay-actions" hidden>
+              <button class="btn" type="button" id="v-retry"><span data-icon="refresh"></span><span>Thử lại</span></button>
+              <button class="btn ghost" type="button" id="v-back">Đóng</button>
+            </div>
+          </div>
+          <div class="drop-hint" id="v-drop" hidden>
+            <span data-icon="upload"></span>
+            <p>Thả file để gửi vào điện thoại<br /><small>APK sẽ được cài đặt · file khác vào thư mục Download</small></p>
+          </div>
+        </div>
+        <nav class="rail" aria-label="Phím điều khiển">
+          <button class="icon-btn" data-action="back" type="button" title="Quay lại" aria-label="Quay lại"><span data-icon="back"></span></button>
+          <button class="icon-btn" data-action="home" type="button" title="Màn hình chính" aria-label="Màn hình chính"><span data-icon="home"></span></button>
+          <button class="icon-btn" data-action="recents" type="button" title="Ứng dụng gần đây" aria-label="Ứng dụng gần đây"><span data-icon="recents"></span></button>
+          <span class="rail-sep"></span>
+          <button class="icon-btn" data-action="volUp" type="button" title="Tăng âm lượng" aria-label="Tăng âm lượng"><span data-icon="volUp"></span></button>
+          <button class="icon-btn" data-action="volDown" type="button" title="Giảm âm lượng" aria-label="Giảm âm lượng"><span data-icon="volDown"></span></button>
+          <button class="icon-btn" data-action="power" type="button" title="Nút nguồn" aria-label="Nút nguồn"><span data-icon="power"></span></button>
+          <span class="rail-sep"></span>
+          <button class="icon-btn" data-action="rotate" type="button" title="Xoay màn hình" aria-label="Xoay màn hình"><span data-icon="rotate"></span></button>
+          <button class="icon-btn" data-action="notifications" type="button" title="Thông báo" aria-label="Mở thông báo"><span data-icon="bell"></span></button>
+          <button class="icon-btn" data-action="quickSettings" type="button" title="Cài đặt nhanh" aria-label="Cài đặt nhanh"><span data-icon="grid"></span></button>
+          <button class="icon-btn" data-action="screenPower" type="button" title="Tắt màn hình điện thoại (vẫn phản chiếu)" aria-label="Tắt/bật màn hình điện thoại"><span data-icon="screenOff"></span></button>
+          <span class="rail-sep"></span>
+          <button class="icon-btn" data-action="keyboard" type="button" title="Gõ phím" aria-label="Bàn phím"><span data-icon="keyboard"></span></button>
+          <button class="icon-btn" data-action="paste" type="button" title="Dán clipboard máy tính vào điện thoại" aria-label="Dán clipboard"><span data-icon="clipboard"></span></button>
+        </nav>
+      </div>
+      <textarea id="v-keys" class="key-sink" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" aria-label="Nhập phím cho điện thoại"></textarea>
+      <input type="file" id="v-file" multiple hidden />
+    </div>
+
+    <dialog class="dialog" id="settings">
+      <form method="dialog" id="settings-form">
+        <header class="dialog-head">
+          <h2>Chất lượng & tùy chọn</h2>
+          <button class="icon-btn" value="cancel" type="submit" aria-label="Đóng"><span data-icon="close"></span></button>
+        </header>
+        <div class="fields">
+          <label class="field">
+            <span>Độ phân giải tối đa</span>
+            <select name="maxSize">
+              <option value="720">720 px</option>
+              <option value="1024">1024 px</option>
+              <option value="1280">1280 px (khuyên dùng)</option>
+              <option value="1600">1600 px</option>
+              <option value="1920">1920 px</option>
+              <option value="0">Gốc của máy</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Bitrate video</span>
+            <select name="videoBitRate">
+              <option value="2000000">2 Mbps (mạng chậm)</option>
+              <option value="4000000">4 Mbps</option>
+              <option value="8000000">8 Mbps (mặc định)</option>
+              <option value="12000000">12 Mbps</option>
+              <option value="16000000">16 Mbps</option>
+              <option value="24000000">24 Mbps</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Khung hình / giây</span>
+            <select name="maxFps">
+              <option value="30">30 fps</option>
+              <option value="60">60 fps</option>
+              <option value="90">90 fps</option>
+              <option value="120">120 fps</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Nguồn âm thanh</span>
+            <select name="audioSource">
+              <option value="output">Âm thanh hệ thống (tắt loa máy)</option>
+              <option value="playback">Âm thanh hệ thống (vẫn phát trên máy)</option>
+              <option value="mic">Micro của điện thoại</option>
+            </select>
+          </label>
+        </div>
+        <div class="toggles">
+          <label class="toggle"><input type="checkbox" name="audio" /><span>Chuyển âm thanh <small>Android 11+</small></span></label>
+          <label class="toggle"><input type="checkbox" name="control" /><span>Cho phép điều khiển <small>tắt = chỉ xem</small></span></label>
+          <label class="toggle"><input type="checkbox" name="clipboardAutosync" /><span>Đồng bộ clipboard</span></label>
+          <label class="toggle"><input type="checkbox" name="stayAwake" /><span>Giữ màn hình sáng khi cắm sạc</span></label>
+          <label class="toggle"><input type="checkbox" name="turnScreenOff" /><span>Tắt màn hình điện thoại khi xem</span></label>
+          <label class="toggle"><input type="checkbox" name="showTouches" /><span>Hiện điểm chạm trên điện thoại</span></label>
+          <label class="toggle"><input type="checkbox" name="powerOffOnClose" /><span>Tắt màn hình khi đóng phiên</span></label>
+          <label class="toggle"><input type="checkbox" name="hardwareDecoding" /><span>Giải mã video bằng GPU <small>có thể trễ vài khung trên Windows</small></span></label>
+        </div>
+        <footer class="dialog-foot">
+          <button class="btn ghost" type="button" id="settings-reset">Mặc định</button>
+          <button class="btn primary" value="save" type="submit">Lưu</button>
+        </footer>
+      </form>
+    </dialog>
+
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>

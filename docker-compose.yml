@@ -1,0 +1,19 @@
+services:
+  screentodesktop:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # BẮT BUỘC đổi mật khẩu khi mở ra Internet/LAN
+      ACCESS_PASSWORD: "doi-mat-khau-nay"
+      # Bật khi đứng sau reverse proxy HTTPS (Caddy/nginx)
+      # TRUST_PROXY: "1"
+    # Cho adb trong container thấy điện thoại cắm USB (kể cả cắm sau khi container chạy)
+    privileged: true
+    volumes:
+      - /dev/bus/usb:/dev/bus/usb
+      - adb-keys:/root/.android
+
+volumes:
+  adb-keys:

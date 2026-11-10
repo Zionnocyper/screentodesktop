@@ -1,0 +1,40 @@
+// Small inline stroke icon set (24x24, currentColor).
+const P = {
+  monitor: '<rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  phone: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+  usb: '<circle cx="12" cy="19" r="2"/><path d="M12 17V4M9.5 6.5 12 4l2.5 2.5M12 14l-4-2.5V9M12 12l4-2V7.5"/><rect x="14.8" y="5.5" width="2.4" height="2.4" rx=".4"/><circle cx="8" cy="8" r="1.2"/>',
+  server: '<rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/><path d="M7 7.5h.01M7 16.5h.01"/>',
+  wifi: '<path d="M2 9a14.5 14.5 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0"/><circle cx="12" cy="19.5" r=".8"/>',
+  play: '<path d="M8 5.5v13l10.5-6.5z"/>',
+  sliders: '<path d="M3 6h11M18 6h3M3 12h5M12 12h9M3 18h13M20 18h1"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  back: '<path d="M16 5.5 7 12l9 6.5z"/>',
+  home: '<circle cx="12" cy="12" r="6.5"/>',
+  recents: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+  volUp: '<path d="M3.5 9.5v5h3.5l4.5 4v-13l-4.5 4z"/><path d="M16 12h5M18.5 9.5v5"/>',
+  volDown: '<path d="M3.5 9.5v5h3.5l4.5 4v-13l-4.5 4z"/><path d="M16 12h5"/>',
+  speaker: '<path d="M3.5 9.5v5h3.5l4.5 4v-13l-4.5 4z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/>',
+  speakerOff: '<path d="M3.5 9.5v5h3.5l4.5 4v-13l-4.5 4z"/><path d="m16 9.5 5 5M21 9.5l-5 5"/>',
+  power: '<path d="M12 3v8"/><path d="M6.6 6.6a7.5 7.5 0 1 0 10.8 0"/>',
+  rotate: '<path d="M20 12a8 8 0 1 1-2.6-5.9L20 8.5"/><path d="M20 3.5v5h-5"/>',
+  bell: '<path d="M6 16v-5a6 6 0 1 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5a2 2 0 0 0 4 0"/>',
+  grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  camera: '<path d="M3.5 8h3.5l2-3h6l2 3h3.5v11h-17z"/><circle cx="12" cy="13" r="3.5"/>',
+  maximize: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+  keyboard: '<rect x="2.5" y="6" width="19" height="12" rx="2"/><path d="M6.5 10h.01M10 10h.01M14 10h.01M17.5 10h.01M7.5 14h9"/>',
+  upload: '<path d="M12 15.5V4M7.5 8.5 12 4l4.5 4.5M4 15.5V20h16v-4.5"/>',
+  close: '<path d="M6 6l12 12M18 6 6 18"/>',
+  screenOff: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M3 3l18 18"/>',
+  clipboard: '<rect x="5.5" y="4.5" width="13" height="16.5" rx="2"/><path d="M9 4.5V3h6v1.5M9 11h6M9 15h4"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4.5V11h-6.5"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>',
+  unlink: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7M3 3l18 18"/>',
+  logout: '<path d="M14.5 4H19v16h-4.5M10 8l-4 4 4 4M6 12h10"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/>',
+  alert: '<path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.5h.01"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+};
+
+export function icon(name, cls = '') {
+  return `<svg class="icon ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] ?? ''}</svg>`;
+}

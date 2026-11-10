@@ -1,0 +1,29 @@
+{
+  "name": "screentodesktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Mirror and control Android phones in the browser (scrcpy + WebCodecs + WebUSB)",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "node --watch server/index.js",
+    "build": "vite build",
+    "start": "node server/index.js",
+    "fetch-server": "node scripts/fetch-server.js",
+    "postinstall": "node scripts/fetch-server.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "ws": "^8.22.2"
+  },
+  "devDependencies": {
+    "@yume-chan/adb": "^2.6.4",
+    "@yume-chan/adb-credential-web": "^2.1.0",
+    "@yume-chan/adb-daemon-webusb": "^2.3.2",
+    "@yume-chan/stream-extra": "^2.6.1",
+    "vite": "^8.3.7"
+  }
+}
