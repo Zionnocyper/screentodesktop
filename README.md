@@ -2,6 +2,8 @@
 
 Hiển thị và điều khiển điện thoại Android ngay trên trình duyệt (tương tự Vysor), tự host được: chạy trên máy cá nhân hoặc deploy lên máy chủ riêng.
 
+**Dùng thử ngay (chế độ WebUSB, Chrome/Edge):** https://zionnocyper.github.io/screentodesktop/ — cắm điện thoại vào máy tính, bấm *Thêm thiết bị USB*.
+
 - Video H.264 độ trễ thấp, giải mã bằng **WebCodecs**, tối đa 120 fps
 - Điều khiển bằng chuột, cảm ứng đa điểm, bàn phím (gõ tiếng Việt qua clipboard), cuộn, Ctrl+kéo để zoom 2 ngón
 - Âm thanh (Android 11+), đồng bộ clipboard hai chiều, chụp màn hình
